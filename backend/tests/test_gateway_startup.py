@@ -53,12 +53,13 @@ def test_gateway_runtime_commands_never_sync_dependencies() -> None:
 
 
 def test_local_frontend_ignores_public_docker_port() -> None:
-    """Root PORT config is public Docker ingress, not the local Next.js port."""
+    """Root PORT config is public ingress, not the configurable Next.js port."""
     serve = _read("scripts/serve.sh")
 
-    assert "env PORT=3000" in serve
+    assert 'DEER_FLOW_FRONTEND_PORT="${DEER_FLOW_FRONTEND_PORT:-3000}"' in serve
+    assert 'env PORT="$DEER_FLOW_FRONTEND_PORT"' in serve
     assert 'run_service "Frontend"' in serve
-    assert "3000 300" in serve
+    assert '"$DEER_FLOW_FRONTEND_PORT" 300' in serve
 
 
 def test_production_gateway_has_a_real_readiness_probe() -> None:

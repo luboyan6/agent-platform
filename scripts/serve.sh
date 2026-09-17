@@ -33,17 +33,62 @@ cd "$REPO_ROOT"
 
 # ── Load .env ────────────────────────────────────────────────────────────────
 
+_load_dotenv() {
+    local env_file=$1
+    local line line_number=0 key value
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        line_number=$((line_number + 1))
+        line="${line%$'\r'}"
+
+        case "$line" in
+            "" | \#*) continue ;;
+        esac
+
+        if [[ ! "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+            echo "Invalid dotenv entry at $env_file:$line_number; expected KEY=value" >&2
+            return 1
+        fi
+
+        key="${line%%=*}"
+        value="${line#*=}"
+        case "$value" in
+            \"*\") value="${value:1:${#value}-2}" ;;
+            \'*\') value="${value:1:${#value}-2}" ;;
+        esac
+
+        # Passing one quoted NAME=value argument to the export builtin keeps
+        # dotenv content as data: command substitutions and shell expansions
+        # are never evaluated.
+        export "$key=$value"
+    done < "$env_file"
+}
+
 if [ -f "$REPO_ROOT/.env" ]; then
-    set -a
-    source "$REPO_ROOT/.env"
-    set +a
+    _load_dotenv "$REPO_ROOT/.env"
 fi
+
+# PORT configures the public nginx ingress. Keep the local Next.js listener
+# separate so WSL hosts can avoid Windows/Hyper-V excluded port ranges.
+DEER_FLOW_FRONTEND_PORT="${DEER_FLOW_FRONTEND_PORT:-3000}"
+case "$DEER_FLOW_FRONTEND_PORT" in
+    "" | *[!0-9]*)
+        echo "DEER_FLOW_FRONTEND_PORT must be a numeric TCP port." >&2
+        exit 1
+        ;;
+esac
+if [ "$DEER_FLOW_FRONTEND_PORT" -lt 1 ] || [ "$DEER_FLOW_FRONTEND_PORT" -gt 65535 ]; then
+    echo "DEER_FLOW_FRONTEND_PORT must be between 1 and 65535." >&2
+    exit 1
+fi
+export DEER_FLOW_FRONTEND_PORT
 
 _pick_python() {
     local candidate
     for candidate in python3 python py; do
         # Probe through `env` as well: the frontend is launched as
-        # `env PORT=3000 "$DEERFLOW_PNPM_PYTHON" ...` (FRONTEND_CMD below), and on
+        # `env PORT="$DEER_FLOW_FRONTEND_PORT" "$DEERFLOW_PNPM_PYTHON" ...`
+        # (FRONTEND_CMD below), and on
         # Windows/Git Bash the Microsoft Store python aliases under WindowsApps
         # are skipped by Bash's own PATH lookup yet still resolved (and fail to
         # exec) inside /usr/bin/env. A bare "$candidate" probe passes while the
@@ -131,7 +176,7 @@ _is_deerflow_pid() {
 # (or starting, which stops first) isn't silently killing someone else's run.
 _report_reclaimed_ports() {
     local port pid files root owner
-    for port in 8001 3000 2026; do
+    for port in 8001 "$DEER_FLOW_FRONTEND_PORT" 3000 2026; do
         for pid in $(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null); do
             _is_deerflow_pid "$pid" || continue
             files=$(lsof -b -w -p "$pid" 2>/dev/null)
@@ -187,6 +232,14 @@ _kill_repo_port() {
 
 _is_port_listening() {
     local port=$1
+
+    # WSL can reject a bind because Windows owns the mirrored host port even
+    # when Linux-native socket tools cannot see that listener.
+    if command -v powershell.exe >/dev/null 2>&1; then
+        if WAIT_FOR_PORT_PORT="$port" powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "\$ErrorActionPreference='SilentlyContinue'; \$Port = [int]\$env:WAIT_FOR_PORT_PORT; if (Get-NetTCPConnection -LocalPort \$Port -State Listen) { exit 0 } else { exit 1 }" >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
 
     if command -v lsof >/dev/null 2>&1; then
         if lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
@@ -274,7 +327,10 @@ stop_all() {
     # not match by name still gets reclaimed — otherwise `make dev` fails its
     # nginx port preflight.
     _kill_repo_port 8001
-    _kill_repo_port 3000
+    _kill_repo_port "$DEER_FLOW_FRONTEND_PORT"
+    if [ "$DEER_FLOW_FRONTEND_PORT" != "3000" ]; then
+        _kill_repo_port 3000
+    fi
     _kill_repo_port 2026
     bash ./scripts/cleanup-containers.sh deer-flow-sandbox 2>/dev/null || true
     echo "✓ All services stopped"
@@ -326,15 +382,15 @@ export DEERFLOW_PNPM_PYTHON DEERFLOW_PNPM_RUNNER
 
 # Frontend command
 if $DEV_MODE; then
-    FRONTEND_CMD='env PORT=3000 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev'
+    FRONTEND_CMD='env PORT="$DEER_FLOW_FRONTEND_PORT" "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev'
     if $SKIP_FRONTEND_BUILD; then
         echo "  Note: --skip-frontend-build is ignored in dev mode (next dev does not build)."
     fi
 elif $SKIP_FRONTEND_BUILD; then
     # The BUILD_ID preflight above already guarantees a reusable build exists.
-    FRONTEND_CMD="env PORT=3000 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run start"
+    FRONTEND_CMD="env PORT=\"\$DEER_FLOW_FRONTEND_PORT\" BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run start"
 else
-    FRONTEND_CMD="env PORT=3000 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run preview"
+    FRONTEND_CMD="env PORT=\"\$DEER_FLOW_FRONTEND_PORT\" BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run preview"
 fi
 
 # Runtime path defaults. Local `make dev` launches Gateway from `backend/`,
@@ -439,7 +495,7 @@ fi
 echo ""
 echo "  Services:"
 echo "    Gateway     → localhost:8001  (REST API + agent runtime)"
-echo "    Frontend    → localhost:3000  (Next.js)"
+echo "    Frontend    → localhost:$DEER_FLOW_FRONTEND_PORT  (Next.js)"
 echo "    Nginx       → localhost:2026  (reverse proxy)"
 echo ""
 
@@ -462,6 +518,7 @@ trap 'cleanup 143' TERM
 # In daemon mode, wraps with nohup. Waits for port to be ready.
 run_service() {
     local name="$1" cmd="$2" port="$3" timeout="$4"
+    local service_pid
 
     if _is_port_listening "$port"; then
         echo "✗ $name cannot start because port $port is already in use."
@@ -478,8 +535,9 @@ run_service() {
     else
         sh -c "$cmd" &
     fi
+    service_pid=$!
 
-    bash ./scripts/wait-for-port.sh "$port" "$timeout" "$name" || {
+    bash ./scripts/wait-for-port.sh "$port" "$timeout" "$name" "$service_pid" || {
         local logfile="logs/$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-').log"
         echo "✗ $name failed to start."
         [ -f "$logfile" ] && tail -20 "$logfile"
@@ -493,6 +551,13 @@ run_service() {
 mkdir -p logs
 mkdir -p temp/client_body_temp temp/proxy_temp temp/fastcgi_temp temp/uwsgi_temp temp/scgi_temp
 
+LOCAL_NGINX_CONFIG="$REPO_ROOT/docker/nginx/nginx.local.conf"
+if [ "$DEER_FLOW_FRONTEND_PORT" != "3000" ]; then
+    LOCAL_NGINX_CONFIG="$REPO_ROOT/temp/nginx.local.conf"
+    sed "s/server 127\\.0\\.0\\.1:3000;/server 127.0.0.1:${DEER_FLOW_FRONTEND_PORT};/" \
+        "$REPO_ROOT/docker/nginx/nginx.local.conf" > "$LOCAL_NGINX_CONFIG"
+fi
+
 # 1. Gateway API
 run_service "Gateway" \
     "cd backend && PYTHONPATH=. uv run --no-sync uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 $GATEWAY_EXTRA_FLAGS > ../logs/gateway.log 2>&1" \
@@ -501,11 +566,12 @@ run_service "Gateway" \
 # 2. Frontend
 run_service "Frontend" \
     "cd frontend && $FRONTEND_CMD > ../logs/frontend.log 2>&1" \
-    3000 300
+    "$DEER_FLOW_FRONTEND_PORT" 300
 
 # 3. Nginx
+NGINX_RUN_USER="$(id -un)"
 run_service "Nginx" \
-    "nginx -g 'daemon off;' -c '$REPO_ROOT/docker/nginx/nginx.local.conf' -p '$REPO_ROOT' > logs/nginx.log 2>&1" \
+    "nginx -g 'user $NGINX_RUN_USER; daemon off;' -c '$LOCAL_NGINX_CONFIG' -p '$REPO_ROOT' > logs/nginx.log 2>&1" \
     2026 10
 
 # ── Ready ────────────────────────────────────────────────────────────────────

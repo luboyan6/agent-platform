@@ -12,8 +12,9 @@ import asyncio
 import pytest
 import sqlalchemy as sa
 from alembic import command
+from alembic.script import ScriptDirectory
 
-from deerflow.persistence.bootstrap import _get_alembic_config, _get_head_revision
+from deerflow.persistence.bootstrap import _MIGRATIONS_DIR, _get_alembic_config
 from deerflow.persistence.engine import close_engine, init_engine
 
 pytestmark = pytest.mark.asyncio
@@ -67,8 +68,11 @@ async def _inspect(engine):
         return await conn.run_sync(_read)
 
 
-async def test_0024_is_the_chain_head():
-    assert _get_head_revision() == REVISION
+async def test_0024_remains_in_the_single_head_chain():
+    script = ScriptDirectory(str(_MIGRATIONS_DIR))
+    assert len(script.get_heads()) == 1
+    assert REVISION in {revision.revision for revision in script.walk_revisions()}
+    assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 async def test_0024_upgrade_creates_table_and_indexes(tmp_path):

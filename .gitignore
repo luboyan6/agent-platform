@@ -46,6 +46,7 @@ coverage/
 skills/custom/*
 logs/
 log/
+/temp/
 debug.log
 
 # Local git hooks (keep only on this machine, do not push)
@@ -69,3 +70,9 @@ config.yaml.bak
 
 # Monocle agent-observability trace output (local file exporter)
 .monocle/
+
+# Agent / assistant local state
+.trellis/
+.codex/
+.agents/
+.extensions_config.json.lock

@@ -418,9 +418,19 @@ such a checkout, use `bash ./scripts/<name>.sh ...`.
 
 6. **Access**: http://localhost:2026
 
-Local services always use their internal ports (`8001`, `3000`, and `2026`).
-The root `.env` variable `PORT` configures only the published Docker ingress;
-it does not change the Next.js port used by `make dev`.
+Local services default to their internal ports (`8001`, `3000`, and `2026`).
+The root `.env` variable `PORT` configures only the published Docker ingress.
+Set `DEER_FLOW_FRONTEND_PORT` to move the local Next.js listener when port 3000
+is unavailable (for example, `DEER_FLOW_FRONTEND_PORT=3100` when a WSL/Hyper-V
+excluded range covers 3000). The launcher updates the local nginx upstream, so
+the browser entry remains `http://localhost:2026`.
+The root `.env` is parsed as dotenv data during local startup: use one
+`KEY=value` assignment per non-comment line. Shell commands and expansions are
+not executed, and misplaced YAML or other malformed lines fail with their line number.
+Local nginx temporary files are stored below the repository's `temp/` directory, so
+`make dev` also works when distro paths such as `/var/lib/nginx` are unavailable or
+read-only (including restricted WSL environments). Local nginx workers use the calling
+user so those repository-owned directories do not require a startup ownership change.
 
 #### Startup Modes
 
@@ -553,6 +563,12 @@ Capability Center > Plugins adds, replaces, and deletes one MCP server at a time
 Targeted updates accept both DeerFlow's `type` field and the MCP-spec `transport` field for SSE/HTTP servers.
 Runtime MCP and skill updates replace `extensions_config.json` atomically, so an interrupted write cannot leave the shared configuration truncated or partially written.
 MCP routing hints can also prefer a specific MCP tool for matching requests without forbidding other tools. When `tool_search` defers MCP schemas, matching routing metadata can auto-promote up to `tool_search.auto_promote_top_k` deferred schemas before the model call.
+
+WeKnora users can deploy the repository's standalone, read-only Streamable HTTP
+service and enable the default-disabled `weknora` example entry. DeerFlow keeps
+only the remote MCP URL and service token; the WeKnora API key and allowed
+knowledge bases remain in the retrieval service. See the
+[WeKnora MCP deployment and verification guide](backend/docs/WEKNORA_MCP.md).
 
 OpenViking users can register the official Streamable HTTP endpoint at `/mcp`
 with an owner-bound USER API key. The native `forget` tool is exposed for

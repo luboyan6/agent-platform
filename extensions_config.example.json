@@ -35,6 +35,27 @@
       },
       "description": "Official OpenViking tools for explicit memory and resource operations"
     },
+    "weknora": {
+      "enabled": false,
+      "type": "http",
+      "url": "$WEKNORA_MCP_URL",
+      "headers": {
+        "X-MCP-Auth-Token": "$WEKNORA_MCP_TOKEN"
+      },
+      "tool_name_prefix": true,
+      "session_init_timeout": 30,
+      "description": "Read-only WeKnora document retrieval",
+      "routing": {
+        "mode": "prefer",
+        "priority": 90,
+        "keywords": [
+          "WeKnora",
+          "知识库",
+          "内部文档",
+          "knowledge base"
+        ]
+      }
+    },
     "postgres": {
       "enabled": false,
       "type": "stdio",

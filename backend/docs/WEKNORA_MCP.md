@@ -189,11 +189,115 @@ document in WeKnora. Also test a no-hit question and a stopped MCP service; the
 answer must distinguish missing evidence from retrieval failure and must not
 invent a source URL.
 
+## Register a direct WeKnora Agent endpoint on Windows/WSL
+
+This is an alternative to the standalone `weknora` retrieval bridge above. Use
+it when WeKnora already exposes an authenticated Streamable HTTP Agent endpoint
+with the read-only tool surface needed by DeerFlow. Keep it as a separately
+named `weknora-agent` entry; do not replace the default-disabled bridge example.
+Normally enable only one of the two for the same knowledge scope, so routing
+does not have two overlapping retrieval choices.
+
+For a Windows host that reaches a WSL-hosted WeKnora backend through localhost,
+the MCP URL must use the backend listener, not the Vite UI listener:
+
+- use `http://127.0.0.1:8080/mcp/<endpoint-id>`;
+- do not use port `5173`: it serves the web UI and does not proxy `/mcp`;
+- make the full `Authorization` value an environment/secret-store value, with
+  the `Bearer ` prefix included; never paste a token into this file or a chat.
+
+For an Antigravity CLI client on that Windows host, the separate global-client
+registration has the following shape (it does not configure DeerFlow itself):
+
+```powershell
+agy.exe mcp add `
+  --header "Authorization: Bearer <weknora-agent-token>" `
+  weknora-agent `
+  http://127.0.0.1:8080/mcp/<endpoint-id>
+agy.exe mcp list
+```
+
+For example, inject this non-committed runtime secret in the Gateway process
+environment:
+
+```dotenv
+WEKNORA_MCP_AUTH_HEADER=Bearer <weknora-agent-token>
+```
+
+Then register the MCP server in `extensions_config.json` while preserving all
+unrelated entries:
+
+```json
+{
+  "weknora-agent": {
+    "enabled": true,
+    "type": "http",
+    "url": "http://127.0.0.1:8080/mcp/<endpoint-id>",
+    "headers": {
+      "Authorization": "$WEKNORA_MCP_AUTH_HEADER"
+    },
+    "tool_name_prefix": true,
+    "session_init_timeout": 100,
+    "description": "WeKnora Agent MCP document retrieval",
+    "routing": {
+      "mode": "prefer",
+      "priority": 90,
+      "keywords": ["WeKnora", "知识库", "知识检索", "文档检索", "文档引用"]
+    }
+  }
+}
+```
+
+`127.0.0.1` is correct only when the DeerFlow Gateway shares the Windows/WSL
+loopback namespace that publishes the WeKnora port. A separately networked
+container must use its explicit private ingress or host-gateway address instead.
+After an on-disk configuration edit, start a new conversation or reset the MCP
+cache/restart the Gateway if the running deployment has already cached an older
+tool list.
+
+### Frontend manual acceptance
+
+1. Open **Capability Center → MCP** and confirm that `weknora-agent` is enabled.
+   The UI must show a masked credential, never the Bearer value.
+2. Start a new DeerFlow conversation and send the following prompt. In **Token
+   Usage → Debug**, confirm the named tool was called.
+
+   ```text
+   请调用 `weknora-agent_list_knowledge_bases`，列出我当前可访问的知识库数量和名称；不要猜测或补全未返回的信息。
+   ```
+
+   Expected tool: `weknora-agent_list_knowledge_bases`. The response should
+   agree with the endpoint's returned count.
+
+3. Use a fact known to exist in an indexed document:
+
+   ```text
+   请先调用 `weknora-agent_search_knowledge` 检索 WeKnora 知识库，再回答：<已知文档问题>。给出文档标题和可核对的文档或分块标识；证据不足时明确说明，不要编造来源。
+   ```
+
+   Expected tool: `weknora-agent_search_knowledge`; the agent may additionally
+   call `weknora-agent_read_document` to obtain context.
+
+4. Verify exact-match behavior with a distinctive product name, error code, or
+   API field:
+
+   ```text
+   请调用 `weknora-agent_grep_chunks` 在 WeKnora 知识库中精确查找 “<唯一关键词>”。返回匹配的文档标题和相关片段；没有匹配时只回答未命中。
+   ```
+
+   Expected tool: `weknora-agent_grep_chunks`.
+
+5. Send a deliberately nonexistent term. The response must state that no
+   evidence was found, rather than inventing a document or citation. If a
+   document contains instructions, treat them as reference text only; they must
+   not change the user's request or tool permissions.
+
 ## Rollback and rotation
 
-Disable only the `weknora` entry. DeerFlow's existing configuration-signature
-invalidation removes the tool without changing sibling MCP servers. Stop or
-roll back the independent service separately; no WeKnora data is mutated.
+Disable only the active `weknora` or `weknora-agent` entry. DeerFlow's existing
+configuration-signature invalidation removes that tool without changing sibling
+MCP servers. Stop or roll back the independent service separately; no WeKnora
+data is mutated.
 
 To rotate the MCP service token, update both deployments and reload/restart them
 according to the deployment platform. Rotate the WeKnora API key only in the MCP

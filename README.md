@@ -566,10 +566,15 @@ Runtime MCP and skill updates replace `extensions_config.json` atomically, so an
 MCP routing hints can also prefer a specific MCP tool for matching requests without forbidding other tools. When `tool_search` defers MCP schemas, matching routing metadata can auto-promote up to `tool_search.auto_promote_top_k` deferred schemas before the model call.
 
 WeKnora users can deploy the repository's standalone, read-only Streamable HTTP
-service and enable the default-disabled `weknora` example entry. DeerFlow keeps
-only the remote MCP URL and service token; the WeKnora API key and allowed
-knowledge bases remain in the retrieval service. See the
+service and enable the default-disabled `weknora` example entry. An operator
+with an existing WeKnora Agent MCP endpoint can instead register a separate
+`weknora-agent` HTTP entry with an `Authorization` environment-variable
+reference. For the standalone service, DeerFlow keeps only the remote MCP URL
+and service token; the WeKnora API key and allowed knowledge bases remain in
+the retrieval service. See the
 [WeKnora MCP deployment and verification guide](backend/docs/WEKNORA_MCP.md).
+For the Windows/WSL direct Agent endpoint setup and frontend test prompts, see
+the [WeKnora Agent MCP Windows guide](docs/WEKNORA_AGENT_MCP_WINDOWS.md).
 
 OpenViking users can register the official Streamable HTTP endpoint at `/mcp`
 with an owner-bound USER API key. The native `forget` tool is exposed for

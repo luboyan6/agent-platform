@@ -727,6 +727,14 @@
 
 ### 修复
 
+- **nginx：** 把 600 秒读取超时扩展到其余两个会等待 Gateway 的 location，它们在线程路由的修复
+  之后仍沿用 nginx 默认的 60 秒。`/api/` 兜底 location 之后：无状态的 `POST /api/runs/wait`
+  阻塞在同一套运行完成等待上，并在客户端断开时取消该运行，因此等待超过 60 秒的 API 调用方会
+  同时收到 504 **并且**运行被取消；输入框的 `POST /api/input-polish` 则等待一次性模型调用。
+  `/api/skills` 之后：安装 `.skill` 压缩包会对其中每个文件各做一次 LLM 安全扫描，自定义技能的
+  编辑与回滚各再做一次，它们都没有自己的超时；此前只有同级的 `/api/skills/install/upload`
+  拿到了更长的超时，因此同样的安装经由 `POST /api/skills/install` 会在 60 秒失败。
+  Docker、本地开发与 Helm 配置均已应用。([#5524])
 - **nginx：** 需要等待模型调用的线程路由不再在 60 秒时失败。浏览器直接调用 `/api/threads/*`，
   而该 location 没有设置 `proxy_read_timeout`，因此沿用 nginx 默认的 60 秒，而 `/api/langgraph/`
   允许 600 秒。较慢的 `/compact` 会返回 504，但 Gateway 仍会继续执行并保存压缩结果，于是 UI
@@ -2077,6 +2085,17 @@
 
 ### 安全
 
+- **上传：** 删除上传文件时不再跟随符号链接删除另一个文件。沙箱可写的 uploads 目录中若被
+  放置符号链接，`DELETE /api/threads/{id}/uploads/{filename}`（以及
+  `DeerFlowClient.delete_upload`）此前会删除链接指向的上传文件及其配套 `.md`，却仍报告
+  删除的是请求的文件名。现在符号链接返回 404，与上传列表一致；指向 uploads 目录之外的
+  链接仍以 400 拒绝。([#5547])
+- **前端：** 工具步骤不再把非 Web URL 渲染为链接。思维链面板中的 `web_fetch` URL 与
+  `web_search` / `image_search` 结果链接此前绕过了 Markdown 链接使用的协议白名单，
+  被提示注入的工具调用可在聊天中放入 `file:` 或系统协议处理程序链接（`ms-msdt:`、
+  `vscode:` 等）。现在它们会经过 `isSafeHref`，不安全的 URL 与 Markdown 链接一样显示
+  “Unsafe link omitted” 标记；缺少 args 的工具调用或非字符串的 `web_fetch` URL 也不再导致
+  消息列表崩溃。([#5526])
 - **技能：** 修复公共技能审查门禁中文件可绕过 SkillScan 的缺口。审查分析器此前只把解码为
   文本的文件交给 SkillScan，可执行二进制文件和嵌套压缩包从未被检查；豁免了任意层级
   `evals/fixtures/` 目录下的所有文件；重复的压缩包成员或仅大小写不同的文件名会在扫描前静默
@@ -3483,3 +3502,6 @@ DeerFlow 2.0 是围绕"超级智能体"框架的彻底重写，核心包含子�
 [#5501]: https://github.com/bytedance/deer-flow/pull/5501
 [#5504]: https://github.com/bytedance/deer-flow/pull/5504
 [#5505]: https://github.com/bytedance/deer-flow/pull/5505
+[#5524]: https://github.com/bytedance/deer-flow/pull/5524
+[#5526]: https://github.com/bytedance/deer-flow/pull/5526
+[#5547]: https://github.com/bytedance/deer-flow/pull/5547

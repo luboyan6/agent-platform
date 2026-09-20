@@ -1,8 +1,8 @@
 """Migration tests for 0024_project_documents (Phase-2 spec §6.1).
 
-Pins the table shape and the four indexes on upgrade, the clean downgrade,
-and the chain head (the forward-revision-compat pin moved here with 0023,
-forwarded to 0024 after the rebase onto 0023_user_preferences).
+Pins the table shape and the four indexes on upgrade, and the clean downgrade
+(the chain-head pin moved on to 0025_repair_run_change_seq with that
+revision).
 """
 
 from __future__ import annotations

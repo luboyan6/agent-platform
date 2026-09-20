@@ -941,6 +941,33 @@ This release closes that milestone with **765 merged pull requests**.
 
 ### Fixed
 
+- **persistence:** Heal databases that silently skipped the run-change clock
+  schema. `0023_run_change_seq` was inserted ahead of the already-shipped
+  `0023_user_preferences` revision, so databases stamped at that revision (or
+  later) treat it as an applied ancestor and never execute it — leaving the
+  `run_change_clock` table and the `runs.change_seq` column permanently
+  missing, and the first thread deletion (any run-store change-clock bump)
+  fails with `no such table: run_change_clock`. The new
+  `0025_repair_run_change_seq` revision re-applies the same guarded DDL on
+  upgrade and no-ops on healthy shapes. `RunChangeClockRow` and
+  `UserPreferenceRow` are also registered in the ORM model registry so
+  `create_all` and autogenerate see every table through explicit imports
+  instead of module side effects. Rolling back the repair to
+  `0024_project_documents` intentionally leaves the ancestor-owned schema and
+  existing change positions intact; the repair downgrade is a no-op.
+- **nginx:** Extend the 600-second read timeout to the two remaining locations
+  whose routes wait on the Gateway, both left on nginx's 60-second default by
+  the thread-route fix. Behind the `/api/` catch-all, the stateless
+  `POST /api/runs/wait` blocks on the same run-completion wait and cancels its
+  run when the client disconnects, so an API consumer waiting on a run longer
+  than 60 seconds got a 504 *and* a cancelled run, and the composer's
+  `POST /api/input-polish` waits for a one-shot model call. Behind
+  `/api/skills`, installing a `.skill` archive runs one LLM security scan per
+  file in it, and a custom-skill edit or rollback runs one more; none of them
+  sets its own timeout, and only the sibling `/api/skills/install/upload`
+  endpoint had been given the longer timeout, so the same install through
+  `POST /api/skills/install` failed at 60 seconds. Applied to the Docker,
+  local, and Helm configs. ([#5524])
 - **nginx:** Stop thread routes that wait on a model call from failing at 60
   seconds. The browser calls `/api/threads/*` directly, and that location had
   no `proxy_read_timeout`, so nginx's 60-second default applied while
@@ -2745,6 +2772,21 @@ This release closes that milestone with **765 merged pull requests**.
 
 ### Security
 
+- **uploads:** Deleting an upload no longer follows a symlink to delete a
+  different file. A symlink planted in the sandbox-writable uploads directory
+  made `DELETE /api/threads/{id}/uploads/{filename}` (and
+  `DeerFlowClient.delete_upload`) remove the upload it pointed to, plus that
+  file's companion `.md`, while reporting the requested name as deleted.
+  Symlinks now return 404, matching the upload listing; links that leave the
+  uploads directory are still rejected with 400. ([#5547])
+- **frontend:** Tool steps no longer turn non-web URLs into links. The
+  `web_fetch` URL and `web_search` / `image_search` result links in the
+  chain-of-thought panel skipped the scheme allowlist that markdown links use,
+  so a prompt-injected tool call could put a `file:` or OS protocol-handler
+  link (`ms-msdt:`, `vscode:`, …) into the chat. They now pass `isSafeHref`
+  and show an unsafe URL with the same "Unsafe link omitted" marker as
+  markdown links. A tool call whose args are missing, or whose `web_fetch` URL
+  is not a string, no longer crashes the message list. ([#5526])
 - **skills:** Close gaps that let files skip SkillScan in the public skill
   review gate. The review analyzer passed SkillScan only files it had decoded
   as text, so executable binaries and nested archives were never checked; it
@@ -4255,3 +4297,6 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
 [#5501]: https://github.com/bytedance/deer-flow/pull/5501
 [#5504]: https://github.com/bytedance/deer-flow/pull/5504
 [#5505]: https://github.com/bytedance/deer-flow/pull/5505
+[#5524]: https://github.com/bytedance/deer-flow/pull/5524
+[#5526]: https://github.com/bytedance/deer-flow/pull/5526
+[#5547]: https://github.com/bytedance/deer-flow/pull/5547

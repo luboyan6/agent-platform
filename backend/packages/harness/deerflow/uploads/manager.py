@@ -7,6 +7,7 @@ Both Gateway and Client delegate to these functions.
 import errno
 import logging
 import os
+import shutil
 import stat
 from pathlib import Path
 from urllib.parse import quote
@@ -284,6 +285,54 @@ def write_upload_file_no_symlink(base_dir: Path, filename: str, data: bytes) -> 
     return dest
 
 
+def _reject_same_file(base_dir: Path, filename: str, src: Path, src_stat: os.stat_result) -> None:
+    """Raise :class:`shutil.SameFileError` when *filename* already is *src*.
+
+    Compares identity with ``os.path.samestat`` — what ``copy2`` itself uses —
+    rather than the path text, so a hardlink or a differently spelled path to
+    the same file is caught too.
+    ``lstat`` keeps a planted symlink from being resolved here; the open
+    itself rejects that destination.
+    """
+    dest = base_dir / normalize_filename(filename)
+    try:
+        dest_stat = os.lstat(dest)
+    except (FileNotFoundError, NotADirectoryError):
+        return
+    if os.path.samestat(src_stat, dest_stat):
+        raise shutil.SameFileError(f"{src!r} and {dest!r} are the same file")
+
+
+def copy_upload_file_no_symlink(base_dir: Path, filename: str, src: Path) -> Path:
+    """Copy *src* into an upload destination without following a destination symlink.
+
+    Matches ``shutil.copy2`` for content, permission bits and timestamps, but
+    opens the destination through :func:`open_upload_file_no_symlink` and
+    applies the metadata to that descriptor, never to the name. The source is
+    opened first, so a missing source leaves an existing destination intact.
+    Where descriptor-based ``chmod``/``utime`` are unavailable (Windows), the
+    destination keeps its default mode and the copy time.
+
+    Copying a file onto itself raises :class:`shutil.SameFileError` as
+    ``copy2`` does, and does so before the destination is opened: opening it
+    truncates, which would otherwise leave the caller copying an emptied file
+    over itself. Re-uploading a file that already sits in the uploads
+    directory takes exactly that path.
+    """
+    with open(src, "rb") as src_fh:
+        src_stat = os.fstat(src_fh.fileno())
+        _reject_same_file(base_dir, filename, src, src_stat)
+        dest, fh = open_upload_file_no_symlink(base_dir, filename)
+        with fh:
+            shutil.copyfileobj(src_fh, fh)
+            fh.flush()
+            if os.chmod in os.supports_fd:
+                os.chmod(fh.fileno(), stat.S_IMODE(src_stat.st_mode))
+            if os.utime in os.supports_fd:
+                os.utime(fh.fileno(), ns=(src_stat.st_atime_ns, src_stat.st_mtime_ns))
+    return dest
+
+
 def list_files_in_dir(directory: Path) -> dict:
     """List files (not directories) in *directory*.
 
@@ -318,11 +367,15 @@ def list_files_in_dir(directory: Path) -> dict:
     return {"files": files, "count": len(files)}
 
 
-def delete_file_safe(base_dir: Path, filename: str, *, convertible_extensions: set[str] | None = None) -> dict:
+def delete_file_safe(base_dir: Path, filename: str) -> dict:
     """Delete a file inside *base_dir* after path-traversal validation.
 
-    If *convertible_extensions* is provided and the file's extension matches,
-    the companion ``.md`` file is also removed (if it exists).
+    Only the requested file is removed. A converted document's Markdown
+    companion is left in place: conversion names it after the document's stem
+    and falls back to a ``_N`` suffix when that name is taken, so the ``.md``
+    beside a document may belong to another document sharing that stem, or to
+    the user. Removing it on that guess destroyed the wrong file. It stays
+    listed and can be deleted on its own (issue #5672).
 
     Only regular files are deleted. Upload directories may be mounted into
     local sandboxes, so a sandbox process can plant a symlink under an upload
@@ -332,8 +385,6 @@ def delete_file_safe(base_dir: Path, filename: str, *, convertible_extensions: s
     Args:
         base_dir: Directory containing the file.
         filename: Name of file to delete.
-        convertible_extensions: Lowercase extensions (e.g. ``{".pdf", ".docx"}``)
-            whose companion markdown should be cleaned up.
 
     Returns:
         Dict with success and message.
@@ -349,10 +400,6 @@ def delete_file_safe(base_dir: Path, filename: str, *, convertible_extensions: s
         raise FileNotFoundError(f"File not found: {filename}")
 
     file_path.unlink()
-
-    # Clean up companion markdown generated during upload conversion.
-    if convertible_extensions and file_path.suffix.lower() in convertible_extensions:
-        file_path.with_suffix(".md").unlink(missing_ok=True)
 
     return {"success": True, "message": f"Deleted {filename}"}
 

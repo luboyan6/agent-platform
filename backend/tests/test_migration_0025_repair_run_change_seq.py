@@ -73,11 +73,18 @@ def _table_and_column_state(db_path) -> tuple[bool, bool, set[str], str | None]:
 
 async def test_0025_repair_branches_merge_into_one_head():
     script = ScriptDirectory(str(_MIGRATIONS_DIR))
-    assert script.get_heads() == [MERGE_REVISION]
+    assert len(script.get_heads()) == 1
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     assert script.get_revision(LEGACY_REVISION).down_revision == PREVIOUS
     assert set(script.get_revision(MERGE_REVISION).down_revision) == {LEGACY_REVISION, REVISION}
-    assert _get_head_revision() == MERGE_REVISION
+
+
+async def test_0025_chains_into_the_single_head():
+    script = ScriptDirectory(str(_MIGRATIONS_DIR))
+    assert len(script.get_heads()) == 1
+    # Later migrations may advance the head without removing this revision.
+    assert REVISION in {revision.revision for revision in script.walk_revisions()}
+    assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 
 async def test_all_revision_ids_fit_the_alembic_version_column():
@@ -108,7 +115,7 @@ async def test_each_published_0025_repair_revision_converges_at_merge_head(tmp_p
 
         await bootstrap_schema(engine, backend="sqlite")
 
-        assert await _database_revision(engine) == MERGE_REVISION
+        assert await _database_revision(engine) == _get_head_revision()
         async with engine.connect() as conn:
             assert await conn.scalar(sa.text("SELECT value FROM run_change_clock WHERE id = 1")) == 41
     finally:

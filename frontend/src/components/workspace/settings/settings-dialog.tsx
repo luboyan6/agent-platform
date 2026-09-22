@@ -3,7 +3,6 @@
 import {
   BellIcon,
   CableIcon,
-  InfoIcon,
   BrainIcon,
   PaletteIcon,
   UsersRoundIcon,
@@ -93,15 +92,18 @@ type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
 
 export function SettingsDialog(props: SettingsDialogProps) {
   const { defaultSection = "appearance", ...dialogProps } = props;
+  const initialSection =
+    defaultSection === "about" ? "appearance" : defaultSection;
   const { t } = useI18n();
   const [activeSection, setActiveSection] =
-    useState<SettingsSection>(defaultSection);
+    useState<SettingsSection>(initialSection);
 
   useEffect(() => {
     // When opening the dialog, ensure the active section follows the caller's intent.
-    // This allows triggers like "About" to open the dialog directly on that page.
     if (dialogProps.open) {
-      setActiveSection(defaultSection);
+      setActiveSection(
+        defaultSection === "about" ? "appearance" : defaultSection,
+      );
     }
   }, [defaultSection, dialogProps.open]);
 
@@ -137,7 +139,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
         label: t.settings.sections.subagents,
         icon: UsersRoundIcon,
       },
-      { id: "about", label: t.settings.sections.about, icon: InfoIcon },
     ],
     [
       t.settings.sections.account,
@@ -146,7 +147,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
       t.settings.sections.memory,
       t.settings.sections.subagents,
       t.settings.sections.notification,
-      t.settings.sections.about,
     ],
   );
   return (

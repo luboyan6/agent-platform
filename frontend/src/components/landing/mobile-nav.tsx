@@ -18,7 +18,13 @@ export type MobileNavLink = {
   label: string;
 };
 
-export function MobileNav({ links }: { links: MobileNavLink[] }) {
+export function MobileNav({
+  links,
+  appName = "XIAOE",
+}: {
+  links: MobileNavLink[];
+  appName?: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -29,7 +35,7 @@ export function MobileNav({ links }: { links: MobileNavLink[] }) {
       </SheetTrigger>
       <SheetContent side="right" className="w-64">
         <SheetHeader>
-          <SheetTitle className="font-serif text-xl">DeerFlow</SheetTitle>
+          <SheetTitle className="font-serif text-xl">{appName}</SheetTitle>
         </SheetHeader>
         <nav className="flex flex-col gap-1 px-4 text-base font-medium">
           {links.map((link) => (

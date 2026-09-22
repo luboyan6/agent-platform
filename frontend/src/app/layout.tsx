@@ -6,8 +6,14 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { DEFAULT_LOCALE } from "@/core/i18n/locale";
 
 export const metadata: Metadata = {
-  title: "DeerFlow",
+  title: "XIAOE",
   description: "A LangChain-based framework for building super agents.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+  },
 };
 
 export default function RootLayout({

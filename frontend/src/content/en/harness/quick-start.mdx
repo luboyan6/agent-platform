@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: Learn how to create and run a DeerFlow agent with create_deerflow_agent, from model setup to streaming responses.
+description: Learn how to create and run a XIAOE agent with create_deerflow_agent, from model setup to streaming responses.
 ---
 
 import { Callout, Steps } from "nextra/components";
@@ -8,15 +8,15 @@ import { Callout, Steps } from "nextra/components";
 # Quick Start
 
 <Callout type="info" emoji="🚀">
-  This guide shows you how to build and run a DeerFlow agent in Python with
+  This guide shows you how to build and run a XIAOE agent in Python with
   <code>create_deerflow_agent</code>.
 </Callout>
 
-The fastest way to understand DeerFlow Harness is to create an agent directly in code. This quick start walks through model setup, agent creation, and streaming a response.
+The fastest way to understand XIAOE Harness is to create an agent directly in code. This quick start walks through model setup, agent creation, and streaming a response.
 
 ## Prerequisites
 
-DeerFlow Harness requires Python 3.12 or later. The package is part of the `deerflow` repository under `backend/packages/harness`.
+XIAOE Harness requires Python 3.12 or later. The package is part of the `deerflow` repository under `backend/packages/harness`.
 
 If you are working from the repository clone:
 
@@ -53,7 +53,7 @@ model = ChatOpenAI(
 agent = create_deerflow_agent(model)
 ```
 
-This returns a compiled LangGraph agent with DeerFlow's default middleware chain.
+This returns a compiled LangGraph agent with XIAOE's default middleware chain.
 
 ### Stream a response
 
@@ -95,7 +95,7 @@ Common parameters:
 | `checkpointer`     | Persist agent state across runs                 |
 | `name`             | Logical agent name                              |
 
-## When to use DeerFlowClient instead
+## When to use XIAOEClient instead
 
 `create_deerflow_agent()` is the low-level SDK factory when you want to work directly with the compiled agent graph.
 

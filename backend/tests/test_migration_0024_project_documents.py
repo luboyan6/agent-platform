@@ -1,8 +1,8 @@
 """Migration tests for 0024_project_documents (Phase-2 spec §6.1).
 
-Pins the table shape and the four indexes on upgrade, and the clean downgrade
-(the chain-head pin moved on to 0025_repair_run_change_seq with that
-revision).
+Pins the table shape and the four indexes on upgrade, and the clean downgrade.
+The successor repair has two published 0025 IDs, which converge through
+``0026_merge_run_change_seq``.
 """
 
 from __future__ import annotations

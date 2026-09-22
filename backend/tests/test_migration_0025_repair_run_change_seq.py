@@ -15,16 +15,21 @@ import sqlite3
 import pytest
 import sqlalchemy as sa
 from alembic import command
+from alembic.script import ScriptDirectory
+from sqlalchemy.ext.asyncio import create_async_engine
 
 import deerflow.persistence.models  # noqa: F401  -- registers ORM models
 from deerflow.persistence.base import Base
-from deerflow.persistence.bootstrap import _get_alembic_config, _get_head_revision
+from deerflow.persistence.bootstrap import _MIGRATIONS_DIR, _get_alembic_config, _get_head_revision, bootstrap_schema
 from deerflow.persistence.engine import close_engine, get_session_factory, init_engine
 from deerflow.persistence.run import RunRepository
 
 pytestmark = pytest.mark.asyncio
 
 REVISION = "0025_repair_run_change_seq"
+LEGACY_REVISION = "0025_run_change_seq_repair"
+MERGE_REVISION = "0026_merge_run_change_seq"
+MAX_ALEMBIC_REVISION_ID_LENGTH = 32
 PREVIOUS = "0024_project_documents"
 STAMP_BEFORE_INSERTION = "0023_user_preferences"
 
@@ -66,8 +71,48 @@ def _table_and_column_state(db_path) -> tuple[bool, bool, set[str], str | None]:
     return "run_change_clock" in tables, "change_seq" in run_columns, run_indexes, version_row[0] if version_row else None
 
 
-async def test_0025_is_the_chain_head():
-    assert _get_head_revision() == REVISION
+async def test_0025_repair_branches_merge_into_one_head():
+    script = ScriptDirectory(str(_MIGRATIONS_DIR))
+    assert script.get_heads() == [MERGE_REVISION]
+    assert script.get_revision(REVISION).down_revision == PREVIOUS
+    assert script.get_revision(LEGACY_REVISION).down_revision == PREVIOUS
+    assert set(script.get_revision(MERGE_REVISION).down_revision) == {LEGACY_REVISION, REVISION}
+    assert _get_head_revision() == MERGE_REVISION
+
+
+async def test_all_revision_ids_fit_the_alembic_version_column():
+    """PostgreSQL enforces Alembic's default ``VARCHAR(32)`` version column."""
+    script = ScriptDirectory(str(_MIGRATIONS_DIR))
+    too_long = {revision.revision: len(revision.revision) for revision in script.walk_revisions() if len(revision.revision) > MAX_ALEMBIC_REVISION_ID_LENGTH}
+    assert not too_long, f"revision IDs exceed alembic_version.version_num VARCHAR({MAX_ALEMBIC_REVISION_ID_LENGTH}): {too_long}"
+
+
+async def _database_revision(engine) -> str | None:
+    async with engine.connect() as conn:
+        return (await conn.execute(sa.text("SELECT version_num FROM alembic_version"))).scalar_one_or_none()
+
+
+@pytest.mark.parametrize("published_revision", [LEGACY_REVISION, REVISION])
+async def test_each_published_0025_repair_revision_converges_at_merge_head(tmp_path, published_revision):
+    """A database stamped by either branch must upgrade without manual repair."""
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / f'{published_revision}.db'}")
+    try:
+        cfg = _get_alembic_config(engine)
+        await asyncio.to_thread(command.upgrade, cfg, published_revision)
+        assert await _database_revision(engine) == published_revision
+
+        # Both repairs are guarded: running the sibling branch preserves the
+        # existing clock value while Alembic collapses the two branch stamps.
+        async with engine.begin() as conn:
+            await conn.execute(sa.text("INSERT INTO run_change_clock (id, value) VALUES (1, 41)"))
+
+        await bootstrap_schema(engine, backend="sqlite")
+
+        assert await _database_revision(engine) == MERGE_REVISION
+        async with engine.connect() as conn:
+            assert await conn.scalar(sa.text("SELECT value FROM run_change_clock WHERE id = 1")) == 41
+    finally:
+        await engine.dispose()
 
 
 async def test_0025_repairs_schema_skipped_by_the_0023_insertion(tmp_path):

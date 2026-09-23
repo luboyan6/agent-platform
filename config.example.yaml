@@ -20,7 +20,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 46
+config_version: 47
 
 # Optional per-model request pacing (inside a models[] entry):
 # request_admission:
@@ -3042,6 +3042,31 @@ authorization:
 #         # Security features (enabled by default):
 #         pkce_enabled: true               # PKCE (S256) for authorization code flow
 #         nonce_enabled: true              # Nonce validation in ID tokens
+#
+#       # Fanwei E10 example: OA menu opens /api/v1/auth/oauth/fanwei?next=/workspace
+#       # in the top-level window or a new tab. Set auth.local.allow_registration=false.
+#       # Supply all values through the deployment environment or Secret Manager.
+#       fanwei:
+#         display_name: Fanwei OA
+#         adapter: fanwei_e10
+#         issuer: $FANWEI_OIDC_ISSUER
+#         discovery_url: $FANWEI_OIDC_DISCOVERY_URL
+#         client_id: $FANWEI_OIDC_CLIENT_ID
+#         client_secret: $FANWEI_OIDC_CLIENT_SECRET
+#         shadow_email_secret: $FANWEI_SHADOW_EMAIL_SECRET
+#         redirect_uri: $FANWEI_OIDC_REDIRECT_URI
+#         scopes: [openid, mobile, profile]
+#         require_verified_email: false
+#         token_endpoint_auth_method: client_secret_post
+#         userinfo_token_transport: bearer_header  # post_form or query only after OA capability testing
+#         pkce_enabled: true
+#         nonce_enabled: true
+#         # Use metadata_mode: static only if OA discovery cannot be corrected.
+#         # metadata_mode: static
+#         # authorization_endpoint: $FANWEI_OIDC_AUTHORIZE_URL
+#         # token_endpoint: $FANWEI_OIDC_TOKEN_URL
+#         # userinfo_endpoint: $FANWEI_OIDC_PROFILE_URL
+#         # jwks_uri: $FANWEI_OIDC_JWKS_URL
 
 # --- Plugins ----------------------------------------------------------------
 # Extension packages, loaded once at startup in the order listed here. Each

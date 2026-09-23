@@ -25,6 +25,7 @@ class User(BaseModel):
 
     # OAuth linkage (optional)
     oauth_provider: str | None = Field(None, description="e.g. 'github', 'google'")
+    oauth_issuer: str | None = Field(None, max_length=512, description="Verified OIDC issuer")
     oauth_id: str | None = Field(None, description="User ID from OAuth provider")
 
     # Auth lifecycle

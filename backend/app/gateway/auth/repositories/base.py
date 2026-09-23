@@ -105,3 +105,8 @@ class UserRepository(ABC):
             User if found, None otherwise
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def get_user_by_oidc(self, issuer: str, subject: str) -> User | None:
+        """Get the user mapped to a verified OIDC issuer and subject."""
+        raise NotImplementedError

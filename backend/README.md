@@ -10,7 +10,7 @@ DeerFlow is a LangGraph-based AI super agent with sandbox execution, persistent 
 
 ```
                         ┌──────────────────────────────────────┐
-                        │          Nginx (Port 2026)           │
+                        │     Nginx (PORT; default 2026)       │
                         │      Unified reverse proxy           │
                         └───────┬──────────────────┬───────────┘
                                 │
@@ -208,7 +208,7 @@ export OPENAI_API_KEY="your-api-key-here"
 make dev  # Starts Gateway + Frontend + Nginx
 ```
 
-Access at: http://localhost:2026
+Access at: http://localhost:2026 (or the `PORT` configured in `.env`)
 
 **Backend Only** (from backend directory):
 

@@ -14,6 +14,7 @@ from fastapi import HTTPException, status
 
 from app.gateway.auth.local_provider import LocalAuthProvider
 from app.gateway.auth.oidc import OIDCIdentity
+from app.gateway.auth.oidc_adapters import derive_shadow_email
 from deerflow.config.auth_config import OIDCProviderConfig
 
 logger = logging.getLogger(__name__)
@@ -35,10 +36,48 @@ async def get_or_provision_oidc_user(
 
     Returns a dict with ``user`` (the User model instance) and ``created`` (bool).
     """
-    # 1. Existing OAuth link
-    existing = await local_provider.get_user_by_oauth(provider_id, identity.subject)
-    if existing:
-        return {"user": existing, "created": False}
+    issuer = identity.issuer
+    issuer_matches = issuer == provider_config.issuer if provider_config.adapter == "fanwei_e10" else issuer.rstrip("/") == provider_config.issuer.rstrip("/")
+    if not issuer or not issuer_matches or not identity.subject or len(issuer) > 512 or len(identity.subject) > 128 or len(provider_id) > 32:
+        if provider_config.adapter == "fanwei_e10" or identity.issuer:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid verified OIDC identity")
+    if issuer:
+        existing = await local_provider.get_user_by_oidc(issuer, identity.subject)
+        if existing:
+            return {"user": existing, "created": False}
+
+    legacy = await local_provider.get_user_by_oauth(provider_id, identity.subject)
+    if legacy:
+        if legacy.oauth_issuer and legacy.oauth_issuer != issuer:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="OIDC identity mapping conflict")
+        if provider_config.adapter == "fanwei_e10":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Unverified legacy OIDC mapping conflict")
+        return {"user": legacy, "created": False}
+
+    if provider_config.adapter == "fanwei_e10":
+        if not provider_config.auto_create_users:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Automatic account creation is disabled")
+        email = derive_shadow_email(provider_config.shadow_email_secret or "", issuer, identity.subject)
+        if await local_provider.get_user_by_email(email):
+            winner = await local_provider.get_user_by_oidc(issuer, identity.subject)
+            if winner:
+                return {"user": winner, "created": False}
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="OIDC shadow email already belongs to another account")
+        try:
+            user = await local_provider.create_oauth_user(
+                email=email,
+                oauth_provider=provider_id,
+                oauth_issuer=issuer,
+                oauth_id=identity.subject,
+                system_role="user",
+            )
+        except ValueError:
+            winner = await local_provider.get_user_by_oidc(issuer, identity.subject)
+            if winner:
+                return {"user": winner, "created": False}
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="OIDC identity mapping conflict") from None
+        logger.info("Auto-created OIDC user (provider=%s, role=user)", provider_id)
+        return {"user": user, "created": True}
 
     # 2. Verified email requirement
     if provider_config.require_verified_email and not identity.email_verified:
@@ -83,26 +122,29 @@ async def get_or_provision_oidc_user(
         )
 
     role = _resolve_role(email, provider_config.admin_emails)
+    create_kwargs = {
+        "email": email,
+        "oauth_provider": provider_id,
+        "oauth_id": identity.subject,
+        "system_role": role,
+    }
+    if issuer:
+        create_kwargs["oauth_issuer"] = issuer
     try:
-        user = await local_provider.create_oauth_user(
-            email=email,
-            oauth_provider=provider_id,
-            oauth_id=identity.subject,
-            system_role=role,
-        )
+        user = await local_provider.create_oauth_user(**create_kwargs)
     except ValueError:
         # Lost a race: a concurrent callback (double-click, replayed code) already
         # inserted a row that collides on the unique index. Re-resolve instead of
         # bubbling a raw 500. If the winner created this same identity, return it;
         # otherwise the email now belongs to a different account → 409.
-        existing = await local_provider.get_user_by_oauth(provider_id, identity.subject)
+        existing = await local_provider.get_user_by_oidc(issuer, identity.subject) if issuer else await local_provider.get_user_by_oauth(provider_id, identity.subject)
         if existing:
             return {"user": existing, "created": False}
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=("An account with this email already exists. Contact your administrator to link it to your SSO account."),
         ) from None
-    logger.info("Auto-created OIDC user %s (provider=%s, role=%s)", email, provider_id, role)
+    logger.info("Auto-created OIDC user (provider=%s, role=%s)", provider_id, role)
     return {"user": user, "created": True}
 
 

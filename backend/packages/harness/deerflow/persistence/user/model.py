@@ -28,6 +28,7 @@ from deerflow.persistence.base import Base
 # so 0018_oauth_identity_pg_partial.py keeps its own literal by
 # convention (consistent with every other revision in that package).
 OAUTH_IDENTITY_INDEX_NAME = "idx_users_oauth_identity"
+OIDC_ISSUER_SUBJECT_INDEX_NAME = "idx_users_oidc_issuer_subject"
 
 
 class UserPreferenceRow(Base):
@@ -62,6 +63,7 @@ class UserRow(Base):
     # account per (provider, oauth_id) pair, leaving NULL/NULL rows
     # unconstrained so plain password accounts can coexist.
     oauth_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    oauth_issuer: Mapped[str | None] = mapped_column(String(512), nullable=True)
     oauth_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     # Auth lifecycle flags
@@ -92,5 +94,13 @@ class UserRow(Base):
             unique=True,
             sqlite_where=text("oauth_provider IS NOT NULL AND oauth_id IS NOT NULL"),
             postgresql_where=text("oauth_provider IS NOT NULL AND oauth_id IS NOT NULL"),
+        ),
+        Index(
+            OIDC_ISSUER_SUBJECT_INDEX_NAME,
+            "oauth_issuer",
+            "oauth_id",
+            unique=True,
+            sqlite_where=text("oauth_issuer IS NOT NULL AND oauth_id IS NOT NULL"),
+            postgresql_where=text("oauth_issuer IS NOT NULL AND oauth_id IS NOT NULL"),
         ),
     )

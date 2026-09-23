@@ -7,7 +7,7 @@ The backend runs a LangGraph-based super agent with sandbox execution, persisten
 **Architecture**:
 - **Gateway API** (port 8001): REST API plus embedded LangGraph-compatible agent runtime
 - **Frontend** (port 3000): Next.js web interface
-- **Nginx** (port 2026): Unified reverse proxy entry point
+- **Nginx** (`PORT`, default 2026): Unified reverse proxy entry point
 - **Provisioner** (port 8002, optional in Docker dev): Started only when sandbox is configured for provisioner/Kubernetes mode
 
 **Runtime**:
@@ -275,7 +275,7 @@ InfoQuest connect/read timeout is 30s, separate from crawl timeouts (`tests/test
 
 ### Running the Full Application
 
-Run `make dev` from the repo root to start all services at `http://localhost:2026`.
+Run `make dev` from the repo root to start all services at `http://localhost:2026` by default, or at the `PORT` configured in `.env`.
 
 **All startup modes:**
 

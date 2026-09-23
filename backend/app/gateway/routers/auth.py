@@ -877,6 +877,12 @@ def _resolve_oidc_redirect_uri(request: Request, provider_id: str, provider_conf
     return f"{origin}/api/v1/auth/callback/{provider_id}"
 
 
+def _oidc_callback_error_response(request: Request, provider: str, frontend_base_url: str | None, error_code: str = "sso_failed") -> RedirectResponse:
+    response = RedirectResponse(url=_build_error_redirect(frontend_base_url, error_code), status_code=status.HTTP_302_FOUND)
+    delete_state_cookie(response, request, provider)
+    return response
+
+
 @router.get("/providers")
 async def list_auth_providers():
     """List enabled SSO providers for the login page.
@@ -953,9 +959,15 @@ async def oauth_login(
     }
     service = _get_oidc_service()
     try:
-        metadata = await service.discover(provider_config.issuer, overrides)
-    except OIDCError as exc:
-        logger.error("OIDC discovery failed for provider %s: %s", provider, exc)
+        metadata = await service.discover(
+            provider_config.issuer,
+            overrides,
+            discovery_url=provider_config.discovery_url,
+            metadata_mode=provider_config.metadata_mode,
+            strict_issuer=provider_config.adapter == "fanwei_e10",
+        )
+    except OIDCError:
+        logger.error("OIDC discovery failed for provider %s", provider)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to connect to SSO provider")
 
     auth_url = service.build_authorization_url(
@@ -1004,32 +1016,31 @@ async def oauth_callback(
     app_config = get_app_config()
     oidc_config = app_config.auth.oidc
 
-    # ── Provider error ───────────────────────────────────────────────
-    if error:
-        logger.warning("OIDC provider returned error for %s: %s (description: %s)", provider, error, error_description)
-        redirect = _build_error_redirect(oidc_config.frontend_base_url, "sso_failed")
-        return RedirectResponse(url=redirect, status_code=status.HTTP_302_FOUND)
-
-    if not oidc_config.enabled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SSO authentication is not enabled")
-
     if not _OIDC_PROVIDER_KEY_RE.match(provider):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid provider ID")
 
+    # ── Provider error ───────────────────────────────────────────────
+    if error:
+        logger.warning("OIDC provider returned an error for %s", provider)
+        return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
+
+    if not oidc_config.enabled:
+        return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
+
     provider_config = oidc_config.providers.get(provider)
     if not provider_config:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown SSO provider: {provider}")
+        return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
 
     if not code or not state:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing code or state parameter")
+        return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
 
     # ── Verify state cookie ──────────────────────────────────────────
     state_payload = get_state_cookie(request, provider)
     if not state_payload:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing or expired OIDC state cookie")
+        return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
 
     if not secrets.compare_digest(state_payload.state, state):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OIDC state mismatch")
+        return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
 
     # ── Resolve redirect URI ─────────────────────────────────────────
     redirect_uri = _resolve_oidc_redirect_uri(request, provider, provider_config)
@@ -1043,10 +1054,16 @@ async def oauth_callback(
     }
     service = _get_oidc_service()
     try:
-        metadata = await service.discover(provider_config.issuer, overrides)
-    except OIDCError as exc:
-        logger.error("OIDC discovery failed for provider %s during callback: %s", provider, exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to connect to SSO provider")
+        metadata = await service.discover(
+            provider_config.issuer,
+            overrides,
+            discovery_url=provider_config.discovery_url,
+            metadata_mode=provider_config.metadata_mode,
+            strict_issuer=provider_config.adapter == "fanwei_e10",
+        )
+    except OIDCError:
+        logger.error("OIDC discovery failed for provider %s during callback", provider)
+        return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
 
     # ── Authenticate ─────────────────────────────────────────────────
     try:
@@ -1060,11 +1077,12 @@ async def oauth_callback(
             code_verifier=state_payload.code_verifier,
             nonce=state_payload.nonce,
             auth_method=provider_config.token_endpoint_auth_method,
+            adapter=provider_config.adapter,
+            userinfo_token_transport=provider_config.userinfo_token_transport,
         )
-    except OIDCError as exc:
-        logger.error("OIDC callback authentication failed for %s: %s", provider, exc)
-        redirect = _build_error_redirect(oidc_config.frontend_base_url, "sso_failed")
-        return RedirectResponse(url=redirect, status_code=status.HTTP_302_FOUND)
+    except OIDCError:
+        logger.error("OIDC callback authentication failed for %s", provider)
+        return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
 
     # ── Provision / link user ────────────────────────────────────────
     try:
@@ -1075,9 +1093,8 @@ async def oauth_callback(
             status.HTTP_409_CONFLICT: "sso_account_exists",
         }
         error_code = error_map.get(exc.status_code, "sso_failed")
-        logger.warning("OIDC user provisioning failed for %s (%s): %s", identity.email, provider, exc.detail)
-        redirect = _build_error_redirect(oidc_config.frontend_base_url, error_code)
-        return RedirectResponse(url=redirect, status_code=status.HTTP_302_FOUND)
+        logger.warning("OIDC user provisioning failed for provider %s (status=%s)", provider, exc.status_code)
+        return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url, error_code)
 
     user = result["user"]
 

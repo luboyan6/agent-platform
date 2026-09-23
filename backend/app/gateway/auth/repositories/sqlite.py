@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.gateway.auth.models import User
 from app.gateway.auth.repositories.base import UserNotFoundError, UserRepository
-from deerflow.persistence.user.model import OAUTH_IDENTITY_INDEX_NAME, UserRow
+from deerflow.persistence.user.model import OAUTH_IDENTITY_INDEX_NAME, OIDC_ISSUER_SUBJECT_INDEX_NAME, UserRow
 
 # ``email`` is ``mapped_column(unique=True, index=True)``, which SQLAlchemy
 # (and 0001_baseline) realise as a single UNIQUE INDEX -- not a named UNIQUE
@@ -151,6 +151,7 @@ class SQLiteUserRepository(UserRepository):
             # code can compare timestamps reliably.
             created_at=row.created_at if row.created_at.tzinfo else row.created_at.replace(tzinfo=UTC),
             oauth_provider=row.oauth_provider,
+            oauth_issuer=row.oauth_issuer,
             oauth_id=row.oauth_id,
             needs_setup=row.needs_setup,
             token_version=row.token_version,
@@ -165,6 +166,7 @@ class SQLiteUserRepository(UserRepository):
             system_role=user.system_role,
             created_at=user.created_at,
             oauth_provider=user.oauth_provider,
+            oauth_issuer=user.oauth_issuer,
             oauth_id=user.oauth_id,
             needs_setup=user.needs_setup,
             token_version=user.token_version,
@@ -204,7 +206,9 @@ class SQLiteUserRepository(UserRepository):
                 # pre-check). Attribute the failure to the constraint that
                 # actually fired instead of assuming any one of them.
                 if _is_oauth_identity_violation(exc):
-                    raise ValueError(f"OAuth account already linked: {user.oauth_provider}/{user.oauth_id}") from exc
+                    raise ValueError("OAuth account already linked") from None
+                if _driver_constraint_name(exc) == OIDC_ISSUER_SUBJECT_INDEX_NAME or "users.oauth_issuer, users.oauth_id" in str(exc.orig).lower():
+                    raise ValueError("OIDC identity already linked") from None
                 if _is_email_violation(exc):
                     # A duplicate address that got past the pre-check: a
                     # concurrent insert of the same email.
@@ -273,6 +277,7 @@ class SQLiteUserRepository(UserRepository):
             row.password_hash = user.password_hash
             row.system_role = user.system_role
             row.oauth_provider = user.oauth_provider
+            row.oauth_issuer = user.oauth_issuer
             row.oauth_id = user.oauth_id
             row.needs_setup = user.needs_setup
             row.token_version = user.token_version
@@ -291,6 +296,13 @@ class SQLiteUserRepository(UserRepository):
 
     async def get_user_by_oauth(self, provider: str, oauth_id: str) -> User | None:
         stmt = select(UserRow).where(UserRow.oauth_provider == provider, UserRow.oauth_id == oauth_id)
+        async with self._sf() as session:
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            return self._row_to_user(row) if row is not None else None
+
+    async def get_user_by_oidc(self, issuer: str, subject: str) -> User | None:
+        stmt = select(UserRow).where(UserRow.oauth_issuer == issuer, UserRow.oauth_id == subject)
         async with self._sf() as session:
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()

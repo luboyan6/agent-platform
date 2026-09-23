@@ -52,14 +52,17 @@ def test_gateway_runtime_commands_never_sync_dependencies() -> None:
     assert "PYTHONPATH=. uv run --no-sync uvicorn app.gateway.app:app" in serve
 
 
-def test_local_frontend_ignores_public_docker_port() -> None:
-    """Root PORT config is public ingress, not the configurable Next.js port."""
+def test_local_frontend_uses_its_own_listener_and_port_configures_local_ingress() -> None:
+    """Root PORT controls nginx while Next.js retains its own configurable listener."""
     serve = _read("scripts/serve.sh")
 
+    assert 'DEER_FLOW_NGINX_PORT="${PORT:-2026}"' in serve
     assert 'DEER_FLOW_FRONTEND_PORT="${DEER_FLOW_FRONTEND_PORT:-3000}"' in serve
     assert 'env PORT="$DEER_FLOW_FRONTEND_PORT"' in serve
     assert 'run_service "Frontend"' in serve
     assert '"$DEER_FLOW_FRONTEND_PORT" 300' in serve
+    assert 'run_service "Nginx"' in serve
+    assert '"$DEER_FLOW_NGINX_PORT" 10' in serve
 
 
 def test_production_gateway_has_a_real_readiness_probe() -> None:

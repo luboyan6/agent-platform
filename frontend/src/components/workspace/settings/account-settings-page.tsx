@@ -77,7 +77,11 @@ export function AccountSettingsPage() {
             <span className="text-muted-foreground text-sm">
               {t.settings.account.email}
             </span>
-            <span className="text-sm font-medium">{user?.email ?? "—"}</span>
+            <span className="text-sm font-medium">
+              {user?.oauth_provider && user.email.endsWith("@sso.example")
+                ? "—"
+                : (user?.email ?? "—")}
+            </span>
             <span className="text-muted-foreground text-sm">
               {t.settings.account.role}
             </span>

@@ -12,7 +12,7 @@ import time
 
 import jwt
 from fastapi import Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.gateway.auth.config import get_auth_config
 from app.gateway.csrf_middleware import is_secure_request
@@ -51,7 +51,7 @@ def _verify_state_signed(signed: str, max_age: int = OIDC_STATE_MAX_AGE) -> OIDC
         if time.time() - payload.issued_at > max_age:
             return None
         return payload
-    except jwt.PyJWTError:
+    except (jwt.PyJWTError, ValidationError):
         return None
 
 
@@ -108,7 +108,8 @@ def get_state_cookie(request: Request, provider: str) -> OIDCStatePayload | None
     signed = request.cookies.get(_cookie_name(provider))
     if not signed:
         return None
-    return _verify_state_signed(signed)
+    payload = _verify_state_signed(signed)
+    return payload if payload is not None and payload.provider == provider else None
 
 
 def delete_state_cookie(response: Response, request: Request, provider: str) -> None:

@@ -87,6 +87,9 @@ class LocalAuthProvider(AuthProvider):
         """Get user by OAuth provider and ID."""
         return await self._repo.get_user_by_oauth(provider, oauth_id)
 
+    async def get_user_by_oidc(self, issuer: str, subject: str) -> User | None:
+        return await self._repo.get_user_by_oidc(issuer, subject)
+
     async def count_users(self) -> int:
         """Return total number of registered users."""
         return await self._repo.count_users()
@@ -109,6 +112,7 @@ class LocalAuthProvider(AuthProvider):
         oauth_provider: str,
         oauth_id: str,
         system_role: str = "user",
+        oauth_issuer: str | None = None,
     ) -> User:
         """Create a new user from an OAuth/OIDC login.
 
@@ -127,6 +131,7 @@ class LocalAuthProvider(AuthProvider):
             system_role=system_role,
             needs_setup=False,
             oauth_provider=oauth_provider,
+            oauth_issuer=oauth_issuer,
             oauth_id=oauth_id,
         )
         return await self._repo.create_user(user)

@@ -70,6 +70,19 @@ fi
 
 # PORT configures the public nginx ingress. Keep the local Next.js listener
 # separate so WSL hosts can avoid Windows/Hyper-V excluded port ranges.
+DEER_FLOW_NGINX_PORT="${PORT:-2026}"
+case "$DEER_FLOW_NGINX_PORT" in
+    "" | *[!0-9]*)
+        echo "PORT must be a numeric TCP port." >&2
+        exit 1
+        ;;
+esac
+if [ "$DEER_FLOW_NGINX_PORT" -lt 1 ] || [ "$DEER_FLOW_NGINX_PORT" -gt 65535 ]; then
+    echo "PORT must be between 1 and 65535." >&2
+    exit 1
+fi
+export DEER_FLOW_NGINX_PORT
+
 DEER_FLOW_FRONTEND_PORT="${DEER_FLOW_FRONTEND_PORT:-3000}"
 case "$DEER_FLOW_FRONTEND_PORT" in
     "" | *[!0-9]*)
@@ -130,8 +143,8 @@ done
 
 # ── Stop helper ──────────────────────────────────────────────────────────────
 
-# Every deer-flow worktree (the main checkout + each linked worktree) hardcodes
-# the same dev ports (8001/3000/2026), so a service started from ANY of them
+# Every deer-flow worktree (the main checkout + each linked worktree) shares
+# the same Gateway and default frontend ports, so a service started from ANY of them
 # must be reclaimable from here — otherwise `make stop`/`make dev` in this
 # worktree can neither kill nor take over a port held by a sibling worktree.
 # DEERFLOW_ROOTS is that set of roots; processes living outside all of them
@@ -176,7 +189,7 @@ _is_deerflow_pid() {
 # (or starting, which stops first) isn't silently killing someone else's run.
 _report_reclaimed_ports() {
     local port pid files root owner
-    for port in 8001 "$DEER_FLOW_FRONTEND_PORT" 3000 2026; do
+    for port in 8001 "$DEER_FLOW_FRONTEND_PORT" 3000 "$DEER_FLOW_NGINX_PORT"; do
         for pid in $(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null); do
             _is_deerflow_pid "$pid" || continue
             files=$(lsof -b -w -p "$pid" 2>/dev/null)
@@ -322,16 +335,18 @@ stop_all() {
     nginx -c "$REPO_ROOT/docker/nginx/nginx.local.conf" -p "$REPO_ROOT" -s quit 2>/dev/null || true
     sleep 1
     _kill_repo_nginx
-    # Force-kill any survivors still holding the service ports. 2026 is included
-    # so a lingering nginx (or any deer-flow process) that _kill_repo_nginx did
-    # not match by name still gets reclaimed — otherwise `make dev` fails its
-    # nginx port preflight.
+    # Force-kill any survivors still holding the service ports. The default
+    # ingress port is also included when it differs from the configured one,
+    # so a lingering default nginx remains reclaimable after a config change.
     _kill_repo_port 8001
     _kill_repo_port "$DEER_FLOW_FRONTEND_PORT"
     if [ "$DEER_FLOW_FRONTEND_PORT" != "3000" ]; then
         _kill_repo_port 3000
     fi
-    _kill_repo_port 2026
+    _kill_repo_port "$DEER_FLOW_NGINX_PORT"
+    if [ "$DEER_FLOW_NGINX_PORT" != "2026" ]; then
+        _kill_repo_port 2026
+    fi
     bash ./scripts/cleanup-containers.sh deer-flow-sandbox 2>/dev/null || true
     echo "✓ All services stopped"
 }
@@ -496,7 +511,7 @@ echo ""
 echo "  Services:"
 echo "    Gateway     → localhost:8001  (REST API + agent runtime)"
 echo "    Frontend    → localhost:$DEER_FLOW_FRONTEND_PORT  (Next.js)"
-echo "    Nginx       → localhost:2026  (reverse proxy)"
+echo "    Nginx       → localhost:$DEER_FLOW_NGINX_PORT  (reverse proxy)"
 echo ""
 
 # ── Cleanup handler ──────────────────────────────────────────────────────────
@@ -552,9 +567,12 @@ mkdir -p logs
 mkdir -p temp/client_body_temp temp/proxy_temp temp/fastcgi_temp temp/uwsgi_temp temp/scgi_temp
 
 LOCAL_NGINX_CONFIG="$REPO_ROOT/docker/nginx/nginx.local.conf"
-if [ "$DEER_FLOW_FRONTEND_PORT" != "3000" ]; then
+if [ "$DEER_FLOW_FRONTEND_PORT" != "3000" ] || [ "$DEER_FLOW_NGINX_PORT" != "2026" ]; then
     LOCAL_NGINX_CONFIG="$REPO_ROOT/temp/nginx.local.conf"
-    sed "s/server 127\\.0\\.0\\.1:3000;/server 127.0.0.1:${DEER_FLOW_FRONTEND_PORT};/" \
+    sed \
+        -e "s/server 127\\.0\\.0\\.1:3000;/server 127.0.0.1:${DEER_FLOW_FRONTEND_PORT};/" \
+        -e "s/listen 2026;/listen ${DEER_FLOW_NGINX_PORT};/" \
+        -e "s/listen \\[::\\]:2026;/listen [::]:${DEER_FLOW_NGINX_PORT};/" \
         "$REPO_ROOT/docker/nginx/nginx.local.conf" > "$LOCAL_NGINX_CONFIG"
 fi
 
@@ -572,7 +590,7 @@ run_service "Frontend" \
 NGINX_RUN_USER="$(id -un)"
 run_service "Nginx" \
     "nginx -g 'user $NGINX_RUN_USER; daemon off;' -c '$LOCAL_NGINX_CONFIG' -p '$REPO_ROOT' > logs/nginx.log 2>&1" \
-    2026 10
+    "$DEER_FLOW_NGINX_PORT" 10
 
 # ── Ready ────────────────────────────────────────────────────────────────────
 
@@ -581,7 +599,7 @@ echo "=========================================="
 echo "  ✓ DeerFlow is running!  [$MODE_LABEL]"
 echo "=========================================="
 echo ""
-echo "  🌐 http://localhost:2026"
+echo "  🌐 http://localhost:$DEER_FLOW_NGINX_PORT"
 echo ""
 echo "  Routing: Frontend → Nginx → Gateway"
 echo "  API:     /api/langgraph/*  →  Gateway agent runtime"

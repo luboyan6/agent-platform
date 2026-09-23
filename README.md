@@ -459,14 +459,16 @@ such a checkout, use `bash ./scripts/<name>.sh ...`.
    make dev
    ```
 
-6. **Access**: http://localhost:2026
+6. **Access**: http://localhost:2026 (or the `PORT` configured in `.env`)
 
 Local services default to their internal ports (`8001`, `3000`, and `2026`).
-The root `.env` variable `PORT` configures only the published Docker ingress.
+The root `.env` variable `PORT` configures the public nginx ingress for both
+local and Docker startup. When changing it locally, set `BETTER_AUTH_URL` to
+the same origin (for example, `http://localhost:8080`).
 Set `DEER_FLOW_FRONTEND_PORT` to move the local Next.js listener when port 3000
 is unavailable (for example, `DEER_FLOW_FRONTEND_PORT=3100` when a WSL/Hyper-V
 excluded range covers 3000). The launcher updates the local nginx upstream, so
-the browser entry remains `http://localhost:2026`.
+the browser entry uses `http://localhost:<PORT>`.
 The root `.env` is parsed as dotenv data during local startup: use one
 `KEY=value` assignment per non-comment line. Shell commands and expansions are
 not executed, and misplaced YAML or other malformed lines fail with their line number.

@@ -7,6 +7,7 @@ generation, token exchange, ID token validation, and userinfo retrieval.
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import time
 from dataclasses import dataclass
@@ -17,7 +18,28 @@ import httpx
 import jwt
 from jwt import PyJWK
 
+from app.gateway.auth.oidc_adapters import FanweiProfileError, normalize_fanwei_profile
+
 logger = logging.getLogger(__name__)
+
+
+class _OIDCTokenQueryLogFilter(logging.Filter):
+    """Redact the opt-in query transport token from HTTP client access logs."""
+
+    _token_parameter = re.compile(r"([?&]access_token=)[^&\s\"']+", re.IGNORECASE)
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        rendered = record.getMessage()
+        redacted = self._token_parameter.sub(r"\1[REDACTED]", rendered)
+        if redacted != rendered:
+            record.msg = redacted
+            record.args = ()
+        return True
+
+
+_token_query_log_filter = _OIDCTokenQueryLogFilter()
+for _http_logger_name in ("httpx", "httpcore.proxy", "httpcore.socks", "httpcore.http11", "httpcore.connection", "httpcore.http2"):
+    logging.getLogger(_http_logger_name).addFilter(_token_query_log_filter)
 
 # ── Data types ────────────────────────────────────────────────────────────
 
@@ -43,10 +65,13 @@ class OIDCIdentity:
 
     provider: str
     subject: str
-    email: str
+    email: str | None
     email_verified: bool
     name: str | None
     claims: dict[str, Any]
+    issuer: str = ""
+    mobile: str | None = None
+    job_number: str | None = None
 
 
 class OIDCError(Exception):
@@ -81,7 +106,7 @@ class OIDCService:
         metadata_cache_ttl: float = METADATA_CACHE_TTL,
         jwks_cache_ttl: float = JWKS_CACHE_TTL,
     ) -> None:
-        self._metadata_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._metadata_cache: dict[tuple[str, str, bool], tuple[float, dict[str, Any]]] = {}
         self._jwks_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._metadata_ttl = metadata_cache_ttl
         self._jwks_ttl = jwks_cache_ttl
@@ -93,26 +118,46 @@ class OIDCService:
 
     # ── Discovery ──────────────────────────────────────────────────────────
 
-    async def discover(self, issuer: str, overrides: dict[str, str | None] | None = None) -> OIDCMetadata:
+    async def discover(
+        self,
+        issuer: str,
+        overrides: dict[str, str | None] | None = None,
+        *,
+        discovery_url: str | None = None,
+        metadata_mode: str = "discovery",
+        strict_issuer: bool = False,
+    ) -> OIDCMetadata:
         """Fetch and cache OIDC discovery metadata from the issuer.
 
         ``overrides`` may contain endpoint URIs to override discovery values
         (e.g. for providers with non-standard endpoints).
         """
+        if metadata_mode == "static":
+            if not overrides or any(not overrides.get(key) for key in ("authorization_endpoint", "token_endpoint", "userinfo_endpoint", "jwks_uri")):
+                raise OIDCError("Static OIDC metadata is incomplete")
+            return self._metadata_from_dict({"issuer": issuer, **overrides}, None)
+        if metadata_mode != "discovery":
+            raise OIDCError("Unsupported OIDC metadata mode")
         now = time.time()
-        cached = self._metadata_cache.get(issuer)
+        discovery_url = discovery_url or issuer.rstrip("/") + OIDC_DISCOVERY_PATH
+        cache_key = (issuer, discovery_url, strict_issuer)
+        cached = self._metadata_cache.get(cache_key)
         if cached and now - cached[0] < self._metadata_ttl:
             return self._metadata_from_dict(cached[1], overrides)
 
-        discovery_url = issuer.rstrip("/") + OIDC_DISCOVERY_PATH
         try:
             resp = await self._http.get(discovery_url)
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()
         except httpx.HTTPStatusError as exc:
-            raise OIDCError(f"OIDC discovery failed for issuer {issuer}: HTTP {exc.response.status_code}") from exc
-        except httpx.RequestError as exc:
-            raise OIDCError(f"OIDC discovery failed for issuer {issuer}: {exc}") from exc
+            raise OIDCError(f"OIDC discovery failed: HTTP {exc.response.status_code}") from None
+        except httpx.RequestError:
+            raise OIDCError("OIDC discovery request failed") from None
+        except (ValueError, TypeError):
+            raise OIDCError("OIDC discovery response is not valid JSON") from None
+
+        if not isinstance(data, dict):
+            raise OIDCError("OIDC discovery response must be an object")
 
         discovered_issuer = data.get("issuer")
         if not discovered_issuer:
@@ -122,15 +167,18 @@ class OIDCService:
         # Pinning it prevents a tampered/rogue discovery document from steering
         # the accepted `iss` (and thus the ID-token forgery surface) to an
         # attacker-chosen value.
-        if discovered_issuer.rstrip("/") != issuer.rstrip("/"):
+        if discovered_issuer != issuer if strict_issuer else discovered_issuer.rstrip("/") != issuer.rstrip("/"):
             raise OIDCError(f"OIDC discovered issuer '{discovered_issuer}' does not match configured issuer '{issuer}'")
 
-        self._metadata_cache[issuer] = (now, data)
+        self._metadata_cache[cache_key] = (now, data)
         return self._metadata_from_dict(data, overrides)
 
     def _metadata_from_dict(self, data: dict[str, Any], overrides: dict[str, str | None] | None) -> OIDCMetadata:
         """Build OIDCMetadata from a discovery dict, applying endpoint overrides."""
         overrides = overrides or {}
+        for field in ("issuer", "authorization_endpoint", "token_endpoint", "jwks_uri"):
+            if not (overrides.get(field) or data.get(field)):
+                raise OIDCError(f"OIDC metadata is missing {field}")
         return OIDCMetadata(
             issuer=data["issuer"],
             authorization_endpoint=overrides.get("authorization_endpoint") or data["authorization_endpoint"],
@@ -205,16 +253,16 @@ class OIDCService:
         try:
             resp = await self._http.post(metadata.token_endpoint, data=data, headers=headers)
             resp.raise_for_status()
-            return resp.json()
+            tokens = resp.json()
+            if not isinstance(tokens, dict):
+                raise OIDCError("Token response must be an object")
+            return tokens
         except httpx.HTTPStatusError as exc:
-            body = "unknown"
-            try:
-                body = exc.response.text[:200]
-            except Exception:
-                pass
-            raise OIDCError(f"Token exchange failed: HTTP {exc.response.status_code} — {body}") from exc
-        except httpx.RequestError as exc:
-            raise OIDCError(f"Token exchange failed: {exc}") from exc
+            raise OIDCError(f"Token exchange failed: HTTP {exc.response.status_code}") from None
+        except httpx.RequestError:
+            raise OIDCError("Token exchange request failed") from None
+        except (ValueError, TypeError):
+            raise OIDCError("Token response is not valid JSON") from None
 
     # ── JWKS loading ───────────────────────────────────────────────────────
 
@@ -233,9 +281,13 @@ class OIDCService:
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()
         except httpx.HTTPStatusError as exc:
-            raise OIDCError(f"JWKS fetch failed: HTTP {exc.response.status_code}") from exc
-        except httpx.RequestError as exc:
-            raise OIDCError(f"JWKS fetch failed: {exc}") from exc
+            raise OIDCError(f"JWKS fetch failed: HTTP {exc.response.status_code}") from None
+        except httpx.RequestError:
+            raise OIDCError("JWKS fetch request failed") from None
+        except (ValueError, TypeError):
+            raise OIDCError("JWKS response is not valid JSON") from None
+        if not isinstance(data, dict) or not isinstance(data.get("keys"), list):
+            raise OIDCError("JWKS response is invalid")
 
         self._jwks_cache[jwks_uri] = (now, data)
         return data
@@ -259,13 +311,13 @@ class OIDCService:
             try:
                 jwk = PyJWK(jwk_dict, algorithm=algorithm)
                 return jwk.key
-            except jwt.PyJWTError as exc:
-                logger.warning("Skipping invalid JWK (kid=%s) from %s: %s", kid, jwks_uri, exc)
+            except jwt.PyJWTError:
+                logger.warning("Skipping invalid JWK")
                 if not kid:
                     # No kid in token — try next key
                     continue
                 # kid was specified and this key is the one — fail fast
-                raise OIDCValidationError(f"JWK for kid={kid} is invalid: {exc}") from exc
+                raise OIDCValidationError("JWK for ID token signing key is invalid") from None
         return None
 
     # ── ID token validation ────────────────────────────────────────────────
@@ -276,6 +328,7 @@ class OIDCService:
         client_id: str,
         id_token: str,
         nonce: str | None = None,
+        require_kid: bool = False,
     ) -> dict[str, Any]:
         """Validate the ID token and return its claims.
 
@@ -285,9 +338,14 @@ class OIDCService:
         jwks_data = await self._load_jwks(metadata.jwks_uri)
 
         # Resolve the signing key from the JWKS using the token's kid header
-        jwt_header = jwt.get_unverified_header(id_token)
+        try:
+            jwt_header = jwt.get_unverified_header(id_token)
+        except jwt.PyJWTError:
+            raise OIDCValidationError("ID token header is invalid") from None
         kid = jwt_header.get("kid")
         alg = jwt_header.get("alg", "RS256")
+        if require_kid and (not isinstance(kid, str) or not kid):
+            raise OIDCValidationError("ID token is missing a signing key ID")
 
         allowed_algorithms = ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"]
         if alg not in allowed_algorithms:
@@ -311,7 +369,7 @@ class OIDCService:
                 options={
                     "verify_exp": True,
                     "verify_iat": True,
-                    "require": ["exp", "iss", "sub", "aud"],
+                    "require": ["exp", "iat", "iss", "sub", "aud"],
                 },
             )
         except jwt.ExpiredSignatureError:
@@ -320,8 +378,8 @@ class OIDCService:
             raise OIDCValidationError("ID token has an invalid issuer")
         except jwt.InvalidAudienceError:
             raise OIDCValidationError("ID token has an invalid audience")
-        except jwt.PyJWTError as exc:
-            raise OIDCValidationError(f"ID token validation failed: {exc}") from exc
+        except jwt.PyJWTError:
+            raise OIDCValidationError("ID token validation failed") from None
 
         # Validate nonce if expected
         if nonce is not None:
@@ -335,7 +393,16 @@ class OIDCService:
 
     # ── UserInfo ────────────────────────────────────────────────────────────
 
-    async def fetch_userinfo(self, metadata: OIDCMetadata, access_token: str, expected_sub: str) -> dict[str, Any]:
+    async def fetch_userinfo(
+        self,
+        metadata: OIDCMetadata,
+        access_token: str,
+        expected_sub: str,
+        *,
+        provider_id: str = "",
+        adapter: str = "standard",
+        transport: str = "bearer_header",
+    ) -> dict[str, Any]:
         """Fetch userinfo from the UserInfo endpoint.
 
         Validates that the ``sub`` claim matches ``expected_sub``
@@ -344,15 +411,26 @@ class OIDCService:
         if not metadata.userinfo_endpoint:
             return {}
 
-        headers = {"Authorization": f"Bearer {access_token}"}
         try:
-            resp = await self._http.get(metadata.userinfo_endpoint, headers=headers)
+            if transport == "bearer_header":
+                resp = await self._http.get(metadata.userinfo_endpoint, headers={"Authorization": f"Bearer {access_token}"})
+            elif transport == "post_form":
+                resp = await self._http.post(metadata.userinfo_endpoint, data={"access_token": access_token})
+            elif transport == "query":
+                logger.warning("OIDC profile uses query token transport for provider %s; redact query strings in access logs", provider_id)
+                resp = await self._http.get(metadata.userinfo_endpoint, params={"access_token": access_token})
+            else:
+                raise OIDCError("Unsupported UserInfo token transport")
             resp.raise_for_status()
             userinfo: dict[str, Any] = resp.json()
         except httpx.HTTPStatusError as exc:
-            raise OIDCError(f"UserInfo fetch failed: HTTP {exc.response.status_code}") from exc
-        except httpx.RequestError as exc:
-            raise OIDCError(f"UserInfo fetch failed: {exc}") from exc
+            raise OIDCError(f"UserInfo fetch failed: HTTP {exc.response.status_code}") from None
+        except httpx.RequestError:
+            raise OIDCError("UserInfo fetch request failed") from None
+        except (ValueError, TypeError):
+            raise OIDCError("UserInfo response is not valid JSON") from None
+        if not isinstance(userinfo, dict):
+            raise OIDCError("UserInfo response must be an object")
 
         if userinfo.get("sub") and userinfo["sub"] != expected_sub:
             raise OIDCUserInfoMismatch("UserInfo sub does not match ID token sub")
@@ -372,6 +450,8 @@ class OIDCService:
         code_verifier: str | None = None,
         nonce: str | None = None,
         auth_method: str = "client_secret_post",
+        adapter: str = "standard",
+        userinfo_token_transport: str = "bearer_header",
     ) -> OIDCIdentity:
         """Orchestrate the full OIDC callback: token exchange, ID token validation, userinfo.
 
@@ -387,30 +467,60 @@ class OIDCService:
             auth_method=auth_method,
         )
 
+        if adapter == "fanwei_e10" and any(key in token_response for key in ("status", "code", "msg")):
+            if token_response.get("status") != 200 or str(token_response.get("code")) != "0" or token_response.get("msg") != "SUCCESS":
+                raise OIDCError("Fanwei token response returned an unsuccessful business status")
         id_token = token_response.get("id_token")
-        if not id_token:
+        if not isinstance(id_token, str) or not id_token:
             raise OIDCError("Token response is missing id_token")
 
         access_token = token_response.get("access_token", "")
+        if access_token is not None and not isinstance(access_token, str):
+            raise OIDCError("Token response has an invalid access_token")
 
         claims = await self.validate_id_token(
             metadata=metadata,
             client_id=client_id,
             id_token=id_token,
             nonce=nonce,
+            require_kid=adapter == "fanwei_e10",
         )
 
         # Fetch userinfo for email/name if not present in ID token
         userinfo: dict[str, Any] = {}
+        if adapter == "fanwei_e10" and (not metadata.userinfo_endpoint or not access_token):
+            raise OIDCError("Fanwei profile endpoint and access token are required")
         if metadata.userinfo_endpoint and access_token:
             try:
                 userinfo = await self.fetch_userinfo(
                     metadata=metadata,
                     access_token=access_token,
                     expected_sub=claims["sub"],
+                    provider_id=provider_id,
+                    adapter=adapter,
+                    transport=userinfo_token_transport,
                 )
-            except OIDCError as exc:
-                logger.warning("OIDC userinfo fetch failed (continuing with ID token): %s", exc)
+            except OIDCError:
+                if adapter == "fanwei_e10":
+                    raise
+                logger.warning("OIDC userinfo fetch failed; continuing with ID token")
+
+        if adapter == "fanwei_e10":
+            try:
+                supplemental = normalize_fanwei_profile(userinfo, claims["sub"])
+            except FanweiProfileError as exc:
+                raise OIDCError(str(exc)) from None
+            return OIDCIdentity(
+                provider=provider_id,
+                issuer=metadata.issuer,
+                subject=claims["sub"],
+                email=None,
+                email_verified=False,
+                name=supplemental.name,
+                claims=claims,
+                mobile=supplemental.mobile,
+                job_number=supplemental.job_number,
+            )
 
         # Merge userinfo into claims (userinfo takes precedence for email)
         merged = {**claims, **userinfo}
@@ -425,6 +535,7 @@ class OIDCService:
             email_verified=email_verified,
             name=merged.get("name"),
             claims=merged,
+            issuer=metadata.issuer,
         )
 
 

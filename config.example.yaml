@@ -3050,6 +3050,7 @@ authorization:
 #
 #       # Fanwei E10 example: OA menu opens /api/v1/auth/oauth/fanwei?next=/workspace
 #       # in the top-level window or a new tab. Set auth.local.allow_registration=false.
+#       # Configure the OA application's account mapping rule as login name.
 #       # Supply all values through the deployment environment or Secret Manager.
 #       fanwei:
 #         display_name: Fanwei OA
@@ -3058,14 +3059,14 @@ authorization:
 #         discovery_url: $FANWEI_OIDC_DISCOVERY_URL
 #         client_id: $FANWEI_OIDC_CLIENT_ID
 #         client_secret: $FANWEI_OIDC_CLIENT_SECRET
-#         shadow_email_secret: $FANWEI_SHADOW_EMAIL_SECRET
+#         shadow_email_secret: $FANWEI_OIDC_SHADOW_EMAIL_SECRET
 #         redirect_uri: $FANWEI_OIDC_REDIRECT_URI
-#         scopes: [openid, mobile, profile]
+#         scopes: [openid, profile]
 #         require_verified_email: false
 #         token_endpoint_auth_method: client_secret_post
 #         userinfo_token_transport: bearer_header  # post_form or query only after OA capability testing
 #         pkce_enabled: true
-#         nonce_enabled: true
+#         nonce_enabled: false           # This Fanwei deployment's ID token omits nonce; keep state and PKCE enabled
 #         # Use metadata_mode: static only if OA discovery cannot be corrected.
 #         # metadata_mode: static
 #         # authorization_endpoint: $FANWEI_OIDC_AUTHORIZE_URL

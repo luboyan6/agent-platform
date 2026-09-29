@@ -70,7 +70,6 @@ class OIDCIdentity:
     name: str | None
     claims: dict[str, Any]
     issuer: str = ""
-    mobile: str | None = None
     job_number: str | None = None
 
 
@@ -518,7 +517,6 @@ class OIDCService:
                 email_verified=False,
                 name=supplemental.name,
                 claims=claims,
-                mobile=supplemental.mobile,
                 job_number=supplemental.job_number,
             )
 

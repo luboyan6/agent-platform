@@ -16,12 +16,12 @@ sequenceDiagram
   participant OA
   participant DB
   Browser->>Gateway: GET /api/v1/auth/oauth/fanwei
-  Gateway-->>Browser: state/nonce/PKCE cookie; redirect to OA
+  Gateway-->>Browser: state/PKCE cookie; redirect to OA
   Browser->>OA: authorization code request
   OA-->>Browser: redirect to fixed callback with code and state
   Browser->>Gateway: GET /api/v1/auth/callback/fanwei
   Gateway->>OA: POST token; fetch JWKS and profile
-  Gateway->>Gateway: verify signature, issuer, audience, expiry, iat, nonce
+  Gateway->>Gateway: verify signature, issuer, audience, expiry, iat
   Gateway->>DB: find or create user by (oauth_issuer, oauth_id)
   Gateway-->>Browser: Agent session cookie; redirect to /auth/callback
 ```
@@ -32,7 +32,8 @@ sequenceDiagram
 | --- | --- |
 | Application type | Confidential OIDC client; `client_secret_post` |
 | Redirect URI | Exact public HTTPS `https://<agent-host>/api/v1/auth/callback/fanwei` |
-| Scopes | `openid mobile profile` (plus `job_num` only if enabled by OA) |
+| Scopes | `openid profile` (plus `job_num` only if enabled by OA) |
+| Account mapping rule | Login name; no OA phone binding is required |
 | Signing | RS256; JWKS must publish a matching `kid` |
 | Trusted application | Enable only after confirming OA's authorization-consent policy |
 | OA menu URL | `https://<agent-host>/api/v1/auth/oauth/fanwei?next=/workspace` |
@@ -42,9 +43,14 @@ disables local self-registration but does not disable OA users' first-login JIT
 creation. Local phone/SMS registration is not provided. The public callback
 and OA menu URL must use the same provider key, `fanwei`.
 
+This deployment maps the OA account by login name. The login name currently
+has the same characters as the user's phone number, but phone binding and SMS
+verification are unavailable. The profile's mapped `id` is supplementary;
+only the verified ID-token `(iss, sub)` selects an Agent account.
+
 The `config.example.yaml` Fanwei block lists the environment references:
 `FANWEI_OIDC_ISSUER`, `FANWEI_OIDC_DISCOVERY_URL`, `FANWEI_OIDC_CLIENT_ID`,
-`FANWEI_OIDC_CLIENT_SECRET`, `FANWEI_SHADOW_EMAIL_SECRET`, and
+`FANWEI_OIDC_CLIENT_SECRET`, `FANWEI_OIDC_SHADOW_EMAIL_SECRET`, and
 `FANWEI_OIDC_REDIRECT_URI`. The shadow-email secret is a dedicated, stable
 random value of at least 32 bytes. Do not reuse the client secret or JWT key.
 Inject all values locally through the deployment environment or Secret Manager;
@@ -56,22 +62,30 @@ issuer verification. Use separate `FANWEI_OIDC_AUTHORIZE_URL`,
 `FANWEI_OIDC_TOKEN_URL`, `FANWEI_OIDC_PROFILE_URL`, and `FANWEI_OIDC_JWKS_URL`
 references for static mode.
 
+The installed OA was observed returning ID tokens without a `nonce` claim,
+including when the authorization request supplied one. Set
+`nonce_enabled: false` **only for this Fanwei provider**. Keep state, PKCE S256,
+the confidential client, JWKS signature, issuer, audience, expiry, and issued-at
+validation enabled. Other OIDC providers retain nonce validation by default.
+The Agent has PKCE S256 enabled, but OA enforcement of the challenge has not
+been tested separately.
+
 The profile token transport defaults to `bearer_header`. Use `post_form` only
 after verifying support against the installed OA version. `query` is an
 explicit compatibility setting: it places the access token in a request URL,
 so proxy, APM, and access logs must redact the entire query string. PKCE S256
 remains enabled by default. If that OA version rejects PKCE, disable it only
-after an observed capability test; the confidential client, state, and nonce
-remain mandatory. Do not assume support for `prompt=none` or iframe login.
+after an observed capability test; the confidential client and state remain
+mandatory. Do not assume support for `prompt=none` or iframe login.
 
 ### Identity, data ownership, and failure behavior
 
 The verified `(iss, sub)` maps to one internal `users.id`. The nullable
 `users.oauth_issuer` column and unique partial `(oauth_issuer, oauth_id)` index
 enforce the mapping; existing `(oauth_provider, oauth_id)` rows remain valid.
-Phone number, profile `id`, name, and employee number never select an account.
-Phone number changes therefore leave conversations, memory, projects, and
-files attached to the same internal user ID. First login creates a normal
+Login name, profile `id`, name, and employee number never select an account.
+If OA keeps the same `sub` after a login-name change, conversations, memory,
+projects, and files remain attached to the same internal user ID. First login creates a normal
 `user` account with no local password. Its required internal email is
 `oidc-v1-<base32(HMAC-SHA256(secret, issuer || NUL || sub))>@sso.example`:
 it is not a notification address, login credential, or account-linking key.
@@ -80,9 +94,9 @@ Existing password accounts are never auto-linked. OA tokens are not stored.
 | Condition | Result |
 | --- | --- |
 | Discovery issuer or ID-token issuer differs | Fail before provisioning; fix OA/proxy or configured issuer |
-| Bad signature, `kid`, audience, expiry, issued-at, or nonce | Fail before provisioning; inspect OA signing configuration and clock |
+| Bad signature, `kid`, audience, expiry, or issued-at | Fail before provisioning; inspect OA signing configuration and clock |
 | Missing `iss`/`sub` or failed profile business status | Fail before provisioning; inspect OA response contract |
-| Same provider key points to a different issuer | Conflict; investigate configuration, never merge by phone/email |
+| Same provider key points to a different issuer | Conflict; investigate configuration, never merge by login name/email |
 | JIT disabled and no mapping exists | Access denied; enable JIT or use an approved migration |
 | Concurrent first login | Unique index selects one account; a losing request re-reads only the same issuer/sub |
 
@@ -95,14 +109,16 @@ Existing password accounts are never auto-linked. OA tokens are not stored.
    Inject secrets locally, then enable the `fanwei_e10` provider and disable
    local self-registration if this is an SSO-only deployment.
 3. Test OA-logged-in and OA-logged-out navigation, first and repeated login,
-   concurrent first login, phone change, session expiry, and logout. Agent
+   concurrent first login, login-name mapping without a bound phone number,
+   session expiry, and logout. Agent
    logout clears only its own session; the OA session remains active, so a
    later menu click can sign in again without a password. If global logout is
    required, coordinate it with OA and review its end-session endpoint as a
    separate rollout. Record
    only redacted issuer/endpoint consistency and pass/fail evidence. Test PKCE,
-   nonce, profile transport, and JWKS rotation against the real OA version;
-   these capabilities are not established by offline mock tests.
+   profile transport and JWKS rotation against the real OA version. This OA
+   installation omits the ID-token nonce even when requested; re-enable nonce
+   validation if OA is updated to return it.
 4. To roll back application behavior, disable the Fanwei provider and remove
    its OA menu. Preserve the additive issuer column and user rows during
    rollback so SSO data ownership remains recoverable. Rotate the client

@@ -104,8 +104,6 @@ class OIDCProviderConfig(BaseModel):
             raise ValueError("fanwei_e10 requires a confidential client_secret")
         if self.token_endpoint_auth_method != "client_secret_post":
             raise ValueError("fanwei_e10 requires token_endpoint_auth_method=client_secret_post")
-        if not self.nonce_enabled:
-            raise ValueError("fanwei_e10 requires nonce_enabled=true")
         if not self.shadow_email_secret or len(self.shadow_email_secret.encode("utf-8")) < 32:
             raise ValueError("fanwei_e10 requires a dedicated shadow_email_secret of at least 32 bytes")
         if self.require_verified_email:

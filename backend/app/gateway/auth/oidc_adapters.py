@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,7 +15,6 @@ class FanweiProfileError(ValueError):
 
 @dataclass(frozen=True)
 class SupplementalClaims:
-    mobile: str | None = None
     name: str | None = None
     job_number: str | None = None
     source_account_id: str | None = None
@@ -42,13 +40,7 @@ def normalize_fanwei_profile(raw: dict[str, Any], verified_sub: str) -> Suppleme
     subject = raw.get("sub")
     if subject is not None and (not isinstance(subject, str) or not hmac.compare_digest(subject, verified_sub)):
         raise FanweiProfileError("Fanwei profile subject differs from verified ID token subject")
-    mobile = _optional_text(attributes.get("mobile"))
-    if mobile is not None:
-        mobile = re.sub(r"[\s-]", "", mobile)
-        if not re.fullmatch(r"\+?[1-9]\d{5,14}", mobile):
-            mobile = None
     return SupplementalClaims(
-        mobile=mobile,
         name=_optional_text(attributes.get("username")),
         job_number=_optional_text(attributes.get("job_num")),
         source_account_id=_optional_text(raw.get("id")),

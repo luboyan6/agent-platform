@@ -41,7 +41,7 @@ def _fanwei_config(**overrides: object) -> OIDCProviderConfig:
         "client_id": "fanwei-test-client",
         "client_secret": "test-only-client-secret",
         "redirect_uri": "https://agent.example.test/api/v1/auth/callback/fanwei",
-        "scopes": ["openid", "mobile", "profile"],
+        "scopes": ["openid", "profile"],
         "token_endpoint_auth_method": "client_secret_post",
         "userinfo_endpoint": "https://oa.example.test/profile",
         "shadow_email_secret": _SHADOW_SECRET,
@@ -61,7 +61,6 @@ def _fanwei_identity(**overrides: object) -> OIDCIdentity:
         "email_verified": False,
         "name": "Synthetic User",
         "claims": {"iss": _ISSUER, "sub": "stable-oa-subject"},
-        "mobile": "+8613800138000",
         "job_number": "E-100",
     }
     values.update(overrides)
@@ -86,7 +85,6 @@ def test_standard_oidc_defaults_remain_compatible():
     [
         {"client_secret": None},
         {"token_endpoint_auth_method": "none"},
-        {"nonce_enabled": False},
         {"shadow_email_secret": "too-short"},
         {"require_verified_email": True},
         {"allowed_email_domains": ["example.test"]},
@@ -96,6 +94,10 @@ def test_standard_oidc_defaults_remain_compatible():
 def test_fanwei_config_rejects_incompatible_security_settings(overrides: dict[str, object]):
     with pytest.raises(ValidationError):
         _fanwei_config(**overrides)
+
+
+def test_fanwei_allows_explicit_nonce_compatibility_setting():
+    assert _fanwei_config(nonce_enabled=False).nonce_enabled is False
 
 
 def test_static_metadata_requires_all_fanwei_endpoints():
@@ -128,15 +130,14 @@ def test_shadow_email_is_stable_private_and_valid():
     assert TypeAdapter(EmailStr).validate_python(email) == email
 
 
-def test_fanwei_profile_uses_verified_subject_and_nested_attributes_only():
+def test_fanwei_profile_accepts_login_name_without_mobile_and_keeps_verified_subject():
     supplemental = normalize_fanwei_profile(
         {
             "status": 200,
             "code": 0,
             "msg": "SUCCESS",
-            "id": "oa-account-id-that-is-not-a-subject",
+            "id": "13800138000",
             "attributes": {
-                "mobile": "+8613800138000",
                 "username": "Synthetic User",
                 "job_num": "E-100",
             },
@@ -144,10 +145,9 @@ def test_fanwei_profile_uses_verified_subject_and_nested_attributes_only():
         verified_sub="stable-oa-subject",
     )
 
-    assert supplemental.mobile == "+8613800138000"
     assert supplemental.name == "Synthetic User"
     assert supplemental.job_number == "E-100"
-    assert supplemental.source_account_id == "oa-account-id-that-is-not-a-subject"
+    assert supplemental.source_account_id == "13800138000"
 
 
 def test_fanwei_profile_rejects_an_explicit_subject_mismatch():
@@ -242,6 +242,27 @@ async def test_fanwei_accepts_valid_rs256_id_token(monkeypatch, rsa_signing_mate
 
 
 @pytest.mark.asyncio
+async def test_fanwei_without_nonce_still_requires_signed_id_token(monkeypatch, rsa_signing_material):
+    private_key, jwk = rsa_signing_material
+    service = OIDCService()
+    metadata = OIDCMetadata(_ISSUER, "https://oa.example.test/authorize", "https://oa.example.test/token", "https://oa.example.test/profile", "https://oa.example.test/jwks")
+    claims = {"iss": _ISSUER, "sub": "stable-oa-subject", "aud": "synthetic-client", "exp": int(time.time()) + 300, "iat": int(time.time())}
+    token = jwt.encode(claims, private_key, algorithm="RS256", headers={"kid": jwk["kid"]})
+    monkeypatch.setattr(service, "_load_jwks", AsyncMock(return_value={"keys": [jwk]}))
+    try:
+        verified = await service.validate_id_token(metadata, "synthetic-client", token, nonce=None, require_kid=True)
+        assert verified["sub"] == "stable-oa-subject"
+        with pytest.raises(OIDCValidationError, match="missing the nonce"):
+            await service.validate_id_token(metadata, "synthetic-client", token, nonce="synthetic-nonce", require_kid=True)
+        other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        bad_signature = jwt.encode(claims, other_key, algorithm="RS256", headers={"kid": jwk["kid"]})
+        with pytest.raises(OIDCValidationError, match="validation failed"):
+            await service.validate_id_token(metadata, "synthetic-client", bad_signature, nonce=None, require_kid=True)
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("invalid_field", ["issuer", "audience", "nonce", "expired", "future_iat", "missing_iat", "wrong_signature", "unknown_kid"])
 async def test_fanwei_rejects_invalid_rs256_id_token(monkeypatch, rsa_signing_material, invalid_field):
     private_key, jwk = rsa_signing_material
@@ -293,7 +314,7 @@ async def test_fanwei_token_business_envelope_and_nested_profile_are_normalized(
     metadata = OIDCMetadata(_ISSUER, "https://oa.example.test/authorize", "https://oa.example.test/token", "https://oa.example.test/profile", "https://oa.example.test/jwks")
     monkeypatch.setattr(service, "exchange_code", AsyncMock(return_value={"status": 200, "code": 0, "msg": "SUCCESS", "id_token": "synthetic-id-token", "access_token": "synthetic-access-token", "expire": 300}))
     monkeypatch.setattr(service, "validate_id_token", AsyncMock(return_value={"iss": _ISSUER, "sub": "stable-oa-subject"}))
-    monkeypatch.setattr(service, "fetch_userinfo", AsyncMock(return_value={"status": 200, "code": 0, "msg": "SUCCESS", "id": "other-profile-id", "attributes": {"mobile": "+8613800138000", "username": "Synthetic User", "job_num": "E-100"}}))
+    monkeypatch.setattr(service, "fetch_userinfo", AsyncMock(return_value={"status": 200, "code": 0, "msg": "SUCCESS", "id": "13800138000", "attributes": {"username": "Synthetic User", "job_num": "E-100"}}))
     try:
         identity = await service.authenticate_callback(
             provider_id="fanwei",
@@ -310,7 +331,6 @@ async def test_fanwei_token_business_envelope_and_nested_profile_are_normalized(
     assert identity.issuer == _ISSUER
     assert identity.subject == "stable-oa-subject"
     assert identity.email is None
-    assert identity.mobile == "+8613800138000"
     assert identity.job_number == "E-100"
 
 
@@ -512,7 +532,7 @@ async def test_token_exchange_error_never_echoes_provider_response_body(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_fanwei_jit_uses_issuer_subject_and_never_mobile_or_email_linking():
+async def test_fanwei_jit_uses_issuer_subject_and_never_profile_or_email_linking():
     config = _fanwei_config()
     identity = _fanwei_identity()
     local_provider = AsyncMock()
@@ -535,7 +555,7 @@ async def test_fanwei_jit_uses_issuer_subject_and_never_mobile_or_email_linking(
 
 
 @pytest.mark.asyncio
-async def test_fanwei_reuses_same_issuer_subject_after_mobile_changes():
+async def test_fanwei_reuses_same_issuer_subject_after_profile_changes():
     existing = User(email="oidc-v1-existing@sso.example", password_hash=None, oauth_provider="fanwei", oauth_issuer=_ISSUER, oauth_id="stable-oa-subject")
     local_provider = AsyncMock()
     local_provider.get_user_by_oidc.return_value = existing
@@ -543,7 +563,7 @@ async def test_fanwei_reuses_same_issuer_subject_after_mobile_changes():
     result = await get_or_provision_oidc_user(
         "fanwei",
         _fanwei_config(),
-        _fanwei_identity(mobile="+8613900138000"),
+        _fanwei_identity(name="Updated OA Name"),
         local_provider,
     )
 

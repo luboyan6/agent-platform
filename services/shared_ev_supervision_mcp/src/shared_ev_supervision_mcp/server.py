@@ -357,7 +357,7 @@ def build_http_app(settings: ServiceSettings) -> HttpAccessMiddleware:
 
 def main() -> None:
     try:
-        settings = ServiceSettings.from_environ()
+        settings = ServiceSettings.from_config()
     except ConfigError as error:
         raise SystemExit(f"configuration error: {error}") from None
     uvicorn.run(

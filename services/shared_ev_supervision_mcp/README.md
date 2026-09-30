@@ -6,7 +6,38 @@
 
 - 测试后端 A：`http://112.250.106.138:2304/shared-ev-web/prod-api`
 - 前端把登录接口返回的 `access_token` 保存在 `Admin-Token-Ev` Cookie 中，并在 Axios 拦截器中发送 `Authorization: Bearer <access_token>`。
-- MCP 服务从权限不超过 `0600` 的本地文件读取该 Authorization 值。凭证不属于工具参数，不会进入 MCP Schema、日志或配置文件。
+- MCP 服务支持从 Git 忽略的 `config.local.toml` 直接读取 `Admin-Token-Ev`，也保留权限不超过 `0600` 的独立凭证文件方式。凭证不属于工具参数，不会进入 MCP Schema 或日志。
+
+## 本地配置（推荐用于手动测试）
+
+在服务目录复制示例文件：
+
+```bash
+cd services/shared_ev_supervision_mcp
+cp -n config.example.toml config.local.toml
+chmod 600 config.local.toml
+```
+
+用本地编辑器打开 `config.local.toml`，把登录返回的 `access_token`（或浏览器 `Admin-Token-Ev` Cookie 的值）填入：
+
+```toml
+api_base_url = "http://112.250.106.138:2304/shared-ev-web/prod-api"
+Admin-Token-Ev = "在本地填写 access_token"
+```
+
+然后在该目录启动：
+
+```bash
+uv run --locked shared-ev-supervision-mcp
+```
+
+服务自动读取**当前工作目录**的 `config.local.toml`，并将 token 转换为 `Authorization: Bearer ...`；无需设置 `SHARED_EV_API_AUTH_FILE`。文件已加入 `.gitignore`，示例文件不包含真实 token。请勿把真实 token 放入对话、命令行或可提交的配置文件。
+
+环境变量 `SHARED_EV_API_BASE_URL` 优先于本地 `api_base_url`；如果设置了 `SHARED_EV_API_AUTH_FILE`，优先使用该凭证文件。其他监听、超时和 MCP 边界鉴权配置继续通过原环境变量设置。配置文件格式错误、字段错误或凭证无效时会明确报错，不会输出凭证值。
+
+token 更新后需重启本 MCP 服务；此改动不提供自动登录或续期。
+
+## 独立凭证文件（兼容原部署方式）
 
 令牌文件只能有一行，可写成裸 token、`Bearer ...` 或完整的 `Authorization: Bearer ...`。不要把令牌放入 `.env`、命令行或仓库：
 
@@ -14,7 +45,7 @@
 chmod 600 /run/secrets/shared_ev_authorization
 ```
 
-## 启动
+### 启动
 
 ```bash
 cd services/shared_ev_supervision_mcp

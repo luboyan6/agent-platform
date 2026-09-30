@@ -6,6 +6,7 @@ import ipaddress
 import os
 import re
 import stat
+import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,11 +45,45 @@ class ServiceSettings:
             raise ConfigError("SHARED_EV_MCP_AUTH_TOKEN or SHARED_EV_MCP_AUTH_TOKEN_FILE is required for a non-loopback host")
 
     @classmethod
+    def from_config(cls, config_path: Path | None = None, environ: Mapping[str, str] | None = None) -> ServiceSettings:
+        """Load optional local TOML defaults, retaining environment-based deployments."""
+        path = config_path if config_path is not None else Path("config.local.toml")
+        local: dict[str, str] = {}
+        try:
+            with path.open("rb") as file:
+                raw = tomllib.load(file)
+        except FileNotFoundError:
+            if config_path is not None:
+                raise ConfigError("local configuration file cannot be read") from None
+        except (OSError, ValueError):
+            raise ConfigError("local configuration file cannot be read as valid TOML") from None
+        else:
+            if raw.keys() - {"api_base_url", "Admin-Token-Ev"}:
+                raise ConfigError("local configuration contains unsupported fields")
+            for key, value in raw.items():
+                if not isinstance(value, str) or not value.strip():
+                    raise ConfigError("local configuration fields must be non-empty strings")
+                local[key] = value.strip()
+
+        values = dict(os.environ if environ is None else environ)
+        if "SHARED_EV_API_BASE_URL" not in values and "api_base_url" in local:
+            values["SHARED_EV_API_BASE_URL"] = local["api_base_url"]
+        if "SHARED_EV_API_AUTH_FILE" in values:
+            return cls.from_environ(values)
+        if "Admin-Token-Ev" not in local:
+            raise ConfigError("set Admin-Token-Ev in config.local.toml or SHARED_EV_API_AUTH_FILE")
+        return cls._from_values(values, _parse_authorization(local["Admin-Token-Ev"]))
+
+    @classmethod
     def from_environ(cls, environ: Mapping[str, str] | None = None) -> ServiceSettings:
         values = os.environ if environ is None else environ
-        base_url = _required(values, "SHARED_EV_API_BASE_URL")
         auth_path = Path(_required(values, "SHARED_EV_API_AUTH_FILE"))
-        api_authorization = SecretStr(_parse_authorization(_read_secret_file(auth_path, "SHARED_EV_API_AUTH_FILE")))
+        authorization = _parse_authorization(_read_secret_file(auth_path, "SHARED_EV_API_AUTH_FILE"))
+        return cls._from_values(values, authorization)
+
+    @classmethod
+    def _from_values(cls, values: Mapping[str, str], authorization: str) -> ServiceSettings:
+        base_url = _required(values, "SHARED_EV_API_BASE_URL")
 
         mcp_token_value = values.get("SHARED_EV_MCP_AUTH_TOKEN")
         mcp_token_path = values.get("SHARED_EV_MCP_AUTH_TOKEN_FILE")
@@ -61,7 +96,7 @@ class ServiceSettings:
 
         return cls(
             api_base_url=base_url,
-            api_authorization=api_authorization,
+            api_authorization=SecretStr(authorization),
             host=values.get("SHARED_EV_MCP_HOST", "127.0.0.1"),
             port=_parse_int(values, "SHARED_EV_MCP_PORT", 8765),
             mcp_auth_token=SecretStr(mcp_token_value) if mcp_token_value else None,
@@ -129,7 +164,7 @@ def _parse_authorization(raw: str) -> str:
         value = f"Bearer {value}"
     match = re.fullmatch(r"Bearer ([^\s\x00-\x1f\x7f]{16,8192})", value, flags=re.IGNORECASE)
     if match is None:
-        raise ConfigError("SHARED_EV_API_AUTH_FILE does not contain a valid Bearer authorization value")
+        raise ConfigError("upstream credential does not contain a valid Bearer authorization value")
     return f"Bearer {match.group(1)}"
 
 

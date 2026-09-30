@@ -1,0 +1,3 @@
+# Copy to config.local.toml (Git ignored), then fill in your login access_token.
+api_base_url = "http://112.250.106.138:2304/shared-ev-web/prod-api"
+Admin-Token-Ev = ""

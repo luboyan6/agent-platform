@@ -748,7 +748,7 @@ def test_task_tool_forwards_is_internal_false_to_executor(monkeypatch):
 def test_task_tool_copies_attributes_to_executor(monkeypatch):
     """Mapping authz_attributes must be copied; mutating parent doesn't affect executor."""
     runtime = _make_runtime()
-    runtime.context["authz_attributes"] = {"dept": "eng"}
+    runtime.context["authz_attributes"] = {"dept": "eng", "auth_source": "session"}
     captured = {}
 
     class DummyExecutor:
@@ -772,7 +772,7 @@ def test_task_tool_copies_attributes_to_executor(monkeypatch):
 
     _run_task_tool(runtime=runtime, description="test", prompt="p", subagent_type="general-purpose", tool_call_id="tc-1")
     executor_attrs = captured["executor_kwargs"]["authz_attributes"]
-    assert executor_attrs == {"dept": "eng"}
+    assert executor_attrs == {"dept": "eng", "auth_source": "session"}
     # Mutate the executor's copy; original context should not change
     executor_attrs["dept"] = "changed"
     assert runtime.context["authz_attributes"]["dept"] == "eng"

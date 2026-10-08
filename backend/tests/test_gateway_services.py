@@ -3141,8 +3141,8 @@ def test_start_run_session_caller_anti_forgery(_stub_app_config):
 
     # is_internal must be False (server-derived from auth_source="session")
     assert context["is_internal"] is False
-    # authz_attributes must be stripped (no Gateway-side producer)
-    assert "authz_attributes" not in context
+    # Forged attributes are replaced by the Gateway-owned authentication source.
+    assert context["authz_attributes"] == {"auth_source": "session"}
     # channel_user_id must not survive from body.config for a session caller
     assert context.get("channel_user_id") is None
     # Agent Server's reserved auth fields are never valid on the Gateway path.
@@ -4130,7 +4130,7 @@ class TestInjectAuthenticatedUserContextAuthz:
             {"context": {"authz_attributes": [("forged", True)]}},
             request,
         )
-        assert "authz_attributes" not in config["context"]
+        assert config["context"]["authz_attributes"] == {"auth_source": "session"}
 
     def test_clears_forged_authz_attributes_from_configurable_section(self):
         """Client forges authz_attributes via body.config['configurable'] → must be cleared."""
@@ -4183,7 +4183,7 @@ class TestInjectAuthenticatedUserContextAuthz:
         """Even internal callers can't forge authz_attributes."""
         request = _make_request_with_auth_source(AUTH_SOURCE_INTERNAL)
         config = _assemble_authz_run_config({"context": {"authz_attributes": {"forged": True}}}, request)
-        assert "authz_attributes" not in config["context"]
+        assert config["context"]["authz_attributes"] == {"auth_source": AUTH_SOURCE_INTERNAL}
         assert config["context"]["is_internal"] is True
 
     @pytest.mark.parametrize("auth_source", ["session", AUTH_SOURCE_INTERNAL])

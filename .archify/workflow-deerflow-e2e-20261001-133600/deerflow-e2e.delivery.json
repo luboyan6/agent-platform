@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "40fd656f-4c08-4592-b630-a4c201506066",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/root/workspace/agent-platform/.archify/workflow-deerflow-e2e-20261001-133600/candidate.json",
+  "output": "/root/workspace/agent-platform/.archify/workflow-deerflow-e2e-20261001-133600/deerflow-e2e.html",
+  "specification": {
+    "sha256": "a967ab71b7498b6e6619a8a175c3c5a1404d2659d00e9869e24688511c606e6a",
+    "bytes": 8146
+  },
+  "artifact": {
+    "sha256": "3207903b228d0dcba66ddb1286a3b02e06867c61290456aeef45629e8dcdaad4",
+    "bytes": 769893
+  }
+}

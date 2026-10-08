@@ -9,6 +9,7 @@ from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.mcp.config_normalization import normalize_mcp_interceptor_paths
 from deerflow.mcp.context_headers import build_context_headers_interceptor
 from deerflow.mcp.oauth import build_oauth_tool_interceptor
+from deerflow.mcp.rag_access import build_rag_access_interceptor
 from deerflow.mcp.user_scoped_auth import build_user_scoped_auth_interceptor
 from deerflow.reflection import resolve_variable
 
@@ -24,7 +25,7 @@ def build_mcp_tool_interceptors(
     resolver: Any = resolve_variable,
     target_logger: logging.Logger = logger,
 ) -> list[Any]:
-    """Build OAuth, user-scoped auth, context headers, then custom MCP interceptors."""
+    """Build credential/custom interceptors followed by mandatory RAG admission."""
     interceptors: list[Any] = []
     oauth_interceptor = oauth_builder(extensions_config)
     if oauth_interceptor is not None:
@@ -37,7 +38,7 @@ def build_mcp_tool_interceptors(
     if user_auth_interceptor is not None:
         interceptors.append(user_auth_interceptor)
 
-    # Last of the built-ins, by the same rule: a credential the caller chose for
+    # Last credential-injecting built-in: a credential the caller chose for
     # this one request is more specific than a configured per-user or per-server
     # credential, so it must win the final header value for a server declaring
     # more than one source.
@@ -71,6 +72,11 @@ def build_mcp_tool_interceptors(
                 f"Failed to load MCP interceptor {interceptor_path}",
                 exc_info=True,
             )
+    # Always last: inspect the final tool name, arguments and header overrides.
+    # An optional custom interceptor failing to load cannot remove this guard.
+    rag_guard = build_rag_access_interceptor(extensions_config)
+    if rag_guard is not None:
+        interceptors.append(rag_guard)
     return interceptors
 
 

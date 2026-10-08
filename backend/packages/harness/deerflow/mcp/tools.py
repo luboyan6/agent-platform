@@ -1003,9 +1003,13 @@ async def get_mcp_tools(extensions_config: ExtensionsConfig | None = None, *, pe
                         _VALID_MCP_TOOL_NAME.pattern,
                     )
                     continue
-                tag_mcp_tool(tool, server_name=source_name, transport=transport)
                 prefix = f"{source_name}_"
                 original_name = tool.name[len(prefix) :] if tool_name_prefix and tool.name.startswith(prefix) else tool.name
+                tag_mcp_tool(tool, server_name=source_name, transport=transport, original_tool_name=original_name)
+                if server_cfg is not None and server_cfg.rag_access is not None:
+                    from deerflow.mcp.rag_access import stateless_rag_tool
+
+                    tool = stateless_rag_tool(tool, original_name)
                 routing = resolve_effective_mcp_routing(server_cfg, original_name)
                 if routing.get("mode") != "off":
                     tag_mcp_routing(tool, routing)

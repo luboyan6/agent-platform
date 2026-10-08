@@ -4,6 +4,24 @@
     "my_package.mcp.auth:build_auth_interceptor"
   ],
   "mcpServers": {
+    "rag_common": {
+      "enabled": false,
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp/COMMON_ENDPOINT_ID",
+      "headers": {"Authorization": "$RAG_COMMON_AUTHORIZATION"},
+      "tool_name_prefix": true,
+      "description": "Retrieval and QA over explicitly scoped common knowledge bases",
+      "rag_access": {"roles": ["user", "admin"]}
+    },
+    "rag_restricted": {
+      "enabled": false,
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp/RESTRICTED_ENDPOINT_ID",
+      "headers": {"Authorization": "$RAG_RESTRICTED_AUTHORIZATION"},
+      "tool_name_prefix": true,
+      "description": "Retrieval and QA over explicitly scoped restricted knowledge bases",
+      "rag_access": {"roles": ["admin"]}
+    },
     "github": {
       "enabled": false,
       "type": "stdio",

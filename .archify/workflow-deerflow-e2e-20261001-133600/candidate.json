@@ -1,0 +1,286 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "DeerFlow 2.0 端到端输入输出流程图",
+    "subtitle": "从客户端请求接入、网关准入、智能体推理循环，到工具执行、事件分发与检查点持久化",
+    "locale": "zh-CN",
+    "output": ".archify/workflow-deerflow-e2e-20261001-133600/deerflow-e2e.html",
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "viewBox": [1230, 792],
+    "repository": {
+      "url": "https://github.com/luboyan6/agent-platform.git",
+      "revision": "4c32f81d526efa5838bc86f16e6d506216877807",
+      "provider": "github"
+    }
+  },
+  "lanes": [
+    { "id": "ui", "label": "客户端与交互层 (Client UI & Channels)" },
+    { "id": "gateway", "label": "网关接入与准入层 (Gateway & Admission)" },
+    { "id": "agent", "label": "智能体编排核心 (Agent Loop & Reasoning)" },
+    { "id": "tools", "label": "工具与沙箱执行 (Execution & Tools)" },
+    { "id": "persistence", "label": "状态存储与流事件 (State & Event Stream)" }
+  ],
+  "phases": [
+    { "id": "intake", "label": "1. 接入与准入 (Intake & Admission)", "fromCol": 0, "toCol": 1 },
+    { "id": "orchestration", "label": "2. 编排与模型推理 (Orchestration & Reasoning)", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "execution_out", "label": "3. 执行与流式交付 (Execution & Delivery)", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "gw_gate", "label": "鉴权与配置准入", "lane": "gateway", "fromCol": 0, "toCol": 1, "variant": "security" },
+    { "id": "agent_core", "label": "LangGraph 智能体循环", "lane": "agent", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "tool_sandboxes", "label": "多维能力与沙箱", "lane": "tools", "fromCol": 4, "toCol": 4, "variant": "default" },
+    { "id": "stream_delivery", "label": "SSE 实时增量推送", "lane": "gateway", "fromCol": 5, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": [
+    "user_prompt",
+    "gateway_api",
+    "lead_agent",
+    "chat_model",
+    "tool_executor",
+    "stream_bridge",
+    "client_sse"
+  ],
+  "nodes": [
+    {
+      "id": "user_prompt",
+      "lane": "ui",
+      "col": 0,
+      "type": "external",
+      "label": "用户对话输入",
+      "sublabel": "Web 界面或 IM 发送",
+      "width": 132
+    },
+    {
+      "id": "gateway_api",
+      "lane": "gateway",
+      "col": 1,
+      "type": "backend",
+      "label": "网关路由与准入",
+      "sublabel": "鉴权与幂等校验",
+      "tag": "POST /runs/stream",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/app/gateway/routers/thread_runs.py",
+          "line": 963,
+          "end_line": 985,
+          "label": "stream_run"
+        },
+        {
+          "path": "backend/app/gateway/services.py",
+          "line": 1699,
+          "end_line": 1782,
+          "label": "auth and idempotency"
+        }
+      ]
+    },
+    {
+      "id": "memory_store",
+      "lane": "persistence",
+      "col": 1,
+      "type": "database",
+      "label": "DeerMem 记忆检索",
+      "sublabel": "长短期记忆与状态剪枝",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/agents/middlewares/memory_middleware.py",
+          "line": 1,
+          "end_line": 50,
+          "label": "memory_middleware"
+        }
+      ]
+    },
+    {
+      "id": "lead_agent",
+      "lane": "agent",
+      "col": 2,
+      "type": "backend",
+      "label": "Lead Agent 编排",
+      "sublabel": "LangGraph 中间件链",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/agents/lead_agent/agent.py",
+          "line": 33,
+          "end_line": 78,
+          "label": "lead_agent_factory"
+        }
+      ]
+    },
+    {
+      "id": "chat_model",
+      "lane": "agent",
+      "col": 3,
+      "type": "cloud",
+      "label": "大模型推理与决策",
+      "sublabel": "思维链生成与工具决策",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/models/factory.py",
+          "line": 1,
+          "end_line": 50,
+          "label": "create_chat_model"
+        }
+      ]
+    },
+    {
+      "id": "tool_executor",
+      "lane": "tools",
+      "col": 4,
+      "type": "messagebus",
+      "label": "工具分发与沙箱",
+      "sublabel": "Sandbox / MCP 技能执行",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/runtime/runs/worker.py",
+          "line": 1210,
+          "end_line": 1235,
+          "label": "run_assembly"
+        }
+      ]
+    },
+    {
+      "id": "checkpointer",
+      "lane": "persistence",
+      "col": 5,
+      "type": "database",
+      "label": "Checkpointer 存储",
+      "sublabel": "SQLite/Postgres 线程状态",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/runtime/runs/worker.py",
+          "line": 1231,
+          "end_line": 1258,
+          "label": "checkpointer"
+        }
+      ]
+    },
+    {
+      "id": "stream_bridge",
+      "lane": "gateway",
+      "col": 5,
+      "type": "backend",
+      "label": "StreamBridge 分发",
+      "sublabel": "Token 与执行事件广播",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/runtime/stream_bridge/base.py",
+          "line": 1,
+          "end_line": 50,
+          "label": "stream_bridge"
+        }
+      ]
+    },
+    {
+      "id": "client_sse",
+      "lane": "ui",
+      "col": 5,
+      "type": "frontend",
+      "label": "客户端实时渲染",
+      "sublabel": "SSE 接收/最终产物展示",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/app/gateway/routers/thread_runs.py",
+          "line": 997,
+          "end_line": 1015,
+          "label": "sse_consumer"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_prompt_gw",
+      "from": "user_prompt",
+      "to": "gateway_api",
+      "label": "发起运行请求",
+      "role": "main",
+      "variant": "default"
+    },
+    {
+      "id": "e_gw_agent",
+      "from": "gateway_api",
+      "to": "lead_agent",
+      "label": "准入通过装配 Agent",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_mem_agent",
+      "from": "memory_store",
+      "to": "lead_agent",
+      "label": "注入上下文与记忆",
+      "role": "branch",
+      "variant": "dashed"
+    },
+    {
+      "id": "e_agent_llm",
+      "from": "lead_agent",
+      "to": "chat_model",
+      "label": "驱动模型推理",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_llm_tool",
+      "from": "chat_model",
+      "to": "tool_executor",
+      "label": "决策工具调用",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_tool_stream",
+      "from": "tool_executor",
+      "to": "stream_bridge",
+      "label": "上报执行事件",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_stream_ckpt",
+      "from": "stream_bridge",
+      "to": "checkpointer",
+      "label": "快照持久化",
+      "role": "async",
+      "variant": "dashed"
+    },
+    {
+      "id": "e_stream_client",
+      "from": "stream_bridge",
+      "to": "client_sse",
+      "label": "SSE 管道推流",
+      "role": "main",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "端到端生命周期",
+      "items": [
+        "用户发起请求经过 Gateway 鉴权与上下文工程组装",
+        "Lead Agent 驱动模型决策，动态路由至工具或沙箱",
+        "执行事件通过 StreamBridge 零延迟推送到前端界面"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "核心可靠性保障",
+      "items": [
+        "幂等键防止重复提交与网络重试抖动",
+        "Checkpointer 保证故障可从最近检查点无缝恢复",
+        "沙箱环境与超时防护机制保障宿主安全"
+      ]
+    }
+  ]
+}

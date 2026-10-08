@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "bcca6065-b9cc-4083-b5d1-611bc0a708af",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/candidate.json",
+  "output": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+  "specification": {
+    "sha256": "ba67b3fb216b2bee1a7468b68068ef843897908851acb10c0738a410c36665d4",
+    "bytes": 7783
+  },
+  "artifact": {
+    "sha256": "ce9a63d8b1004d1002a3b375b85df4a927acad985aba559c79c48f3080708ed0",
+    "bytes": 767287
+  }
+}

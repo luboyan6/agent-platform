@@ -1260,7 +1260,8 @@ class SubagentExecutor:
         if skill_setup.describe_skill_tool is not None:
             authorization_candidates.append(skill_setup.describe_skill_tool)
         configured_tool_ids = {id(tool) for tool in self._base_tools}
-        authorized_tools, self._authz_provider = apply_tool_authorization(
+        authorized_tools, self._authz_provider = await asyncio.to_thread(
+            apply_tool_authorization,
             authorization_candidates,
             context=authz_context,
             app_config=resolved_app_config,

@@ -28,6 +28,7 @@ def tag_mcp_tool(
     *,
     server_name: str | None = None,
     transport: str | None = None,
+    original_tool_name: str | None = None,
 ) -> BaseTool:
     """Mark ``tool`` as MCP-sourced. Mutates in place and returns it for chaining."""
     metadata: dict[str, Any] = {**(tool.metadata or {}), MCP_TOOL_METADATA_KEY: True}
@@ -36,6 +37,8 @@ def tag_mcp_tool(
             "server_name": server_name,
             "transport": transport or "unknown",
         }
+        if original_tool_name:
+            metadata[MCP_TOOL_SOURCE_METADATA_KEY]["original_tool_name"] = original_tool_name
     tool.metadata = metadata
     return tool
 
@@ -55,10 +58,14 @@ def get_mcp_source(tool: BaseTool) -> dict[str, str] | None:
     transport = source.get("transport")
     if not isinstance(server_name, str) or not server_name:
         return None
-    return {
+    result = {
         "server_name": server_name,
         "transport": transport if isinstance(transport, str) and transport else "unknown",
     }
+    original = source.get("original_tool_name")
+    if isinstance(original, str) and original:
+        result["original_tool_name"] = original
+    return result
 
 
 def tag_mcp_routing(tool: BaseTool, routing: Mapping[str, Any]) -> BaseTool:

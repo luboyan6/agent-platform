@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "skipped",
+  "type": "workflow",
+  "quality": "showcase",
+  "specification": {
+    "path": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/candidate.json",
+    "sha256": "ba67b3fb216b2bee1a7468b68068ef843897908851acb10c0738a410c36665d4",
+    "bytes": 7783
+  },
+  "artifact": {
+    "path": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+    "sha256": "ce9a63d8b1004d1002a3b375b85df4a927acad985aba559c79c48f3080708ed0",
+    "bytes": 767287
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "skipped"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/chrome-unavailable",
+      "severity": "warning",
+      "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+      "subject": {
+        "artifact": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html"
+      },
+      "evidence": {
+        "executable": null
+      },
+      "supportedFixes": [
+        "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.finalize.json",
+    "summaryReceipt": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.finalize-summary.json",
+    "browserCheckReceipt": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.0.1",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-01T05:37:44.700Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2420
+}

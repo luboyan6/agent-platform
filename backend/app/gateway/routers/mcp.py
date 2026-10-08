@@ -15,6 +15,7 @@ from deerflow.config.extensions_config import (
     McpRoutingConfig,
     McpTaskToolsetConfig,
     McpToolOverride,
+    RagMcpAccessConfig,
     atomic_write_extensions_config,
     extensions_config_file_lock,
     extensions_config_write_lock,
@@ -436,6 +437,7 @@ class McpServerConfigResponse(BaseModel):
     """Response model for MCP server configuration."""
 
     enabled: bool = Field(default=True, description="Whether this MCP server is enabled")
+    rag_access: RagMcpAccessConfig | None = Field(default=None, exclude_if=lambda value: value is None, description="Explicit RAG endpoint role grants")
     type: str = Field(default="stdio", description="Transport type: 'stdio', 'sse', or 'http'")
     command: str | None = Field(default=None, description="Command to execute to start the MCP server (for stdio type)")
     args: list[str] = Field(default_factory=list, description="Arguments to pass to the command (for stdio type)")
@@ -465,6 +467,13 @@ class McpServerConfigResponse(BaseModel):
         description="Raw submit/status/cancel tool groups managed as durable background tasks",
     )
     model_config = ConfigDict(extra="allow")
+
+    @field_validator("rag_access", mode="before")
+    @classmethod
+    def _reject_null_rag_access(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError("rag_access cannot be null; disable or delete the endpoint to retire it")
+        return value
 
     @field_validator("headers")
     @classmethod
@@ -1097,6 +1106,9 @@ def _merge_preserving_secrets(
         "headers_from_context": merged_context_headers,
         "tools": merged_tools,
     }
+    # Protection survives both bulk updates and old targeted-replacement clients.
+    if "rag_access" not in incoming.model_fields_set:
+        update["rag_access"] = existing.rag_access
     if preserve_omitted_fields and "user_auth" not in incoming.model_fields_set:
         update["user_auth"] = existing.user_auth
     if preserve_omitted_fields and "headers_from_context" not in incoming.model_fields_set:

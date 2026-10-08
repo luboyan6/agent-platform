@@ -1,0 +1,261 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "DeerFlow 2.0 MCP 运行流程图",
+    "subtitle": "涵盖 MCP 服务器发现、多级凭证拦截、Stdio 会话池隔离、传输执行与异步长任务状态轮询",
+    "locale": "zh-CN",
+    "output": ".archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "viewBox": [1230, 792],
+    "repository": {
+      "url": "https://github.com/luboyan6/agent-platform.git",
+      "revision": "4c32f81d526efa5838bc86f16e6d506216877807",
+      "provider": "github"
+    }
+  },
+  "lanes": [
+    { "id": "config_discovery", "label": "配置与工具发现 (Configuration & Discovery)" },
+    { "id": "security_intercept", "label": "多级鉴权与拦截 (Auth & Interceptors)" },
+    { "id": "session_routing", "label": "会话池与路由隔离 (Session Pool & Routing)" },
+    { "id": "transport_exec", "label": "多传输执行与沙箱 (Transport Execution & Sandbox)" },
+    { "id": "durable_task", "label": "长任务引擎与通知 (Durable Task & Notifications)" }
+  ],
+  "phases": [
+    { "id": "p_discovery", "label": "1. 发现与鉴权 (Discovery & Auth)", "fromCol": 0, "toCol": 1 },
+    { "id": "p_session", "label": "2. 会话分配与调用 (Session & Call)", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "p_durable", "label": "3. 交付与长任务轮询 (Delivery & Durable)", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "g_disc", "label": "配置哈希与动态加载", "lane": "config_discovery", "fromCol": 0, "toCol": 1, "variant": "default" },
+    { "id": "g_sec", "label": "凭证注入拦截器", "lane": "security_intercept", "fromCol": 1, "toCol": 1, "variant": "security" },
+    { "id": "g_pool", "label": "Stdio 会话生命周期", "lane": "session_routing", "fromCol": 2, "toCol": 2, "variant": "emphasis" },
+    { "id": "g_durable", "label": "McpTaskService 后台轮询", "lane": "durable_task", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": [
+    "mcp_config",
+    "mcp_client",
+    "auth_intercept",
+    "session_pool",
+    "transport_exec",
+    "path_rewriter"
+  ],
+  "nodes": [
+    {
+      "id": "mcp_config",
+      "lane": "config_discovery",
+      "col": 0,
+      "type": "database",
+      "label": "MCP 配置与缓存",
+      "sublabel": "双阶段失效与签名对比",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/mcp/cache.py",
+          "line": 1,
+          "end_line": 50,
+          "label": "cache_staleness"
+        }
+      ]
+    },
+    {
+      "id": "mcp_client",
+      "lane": "config_discovery",
+      "col": 1,
+      "type": "backend",
+      "label": "MultiServerClient",
+      "sublabel": "动态工具列表与名称前缀",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/mcp/tools.py",
+          "line": 841,
+          "end_line": 918,
+          "label": "get_mcp_tools"
+        }
+      ]
+    },
+    {
+      "id": "auth_intercept",
+      "lane": "security_intercept",
+      "col": 1,
+      "type": "security",
+      "label": "多级凭证拦截器",
+      "sublabel": "OAuth/UserAuth/Context",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/mcp/interceptors.py",
+          "line": 1,
+          "end_line": 50,
+          "label": "interceptors"
+        }
+      ]
+    },
+    {
+      "id": "session_pool",
+      "lane": "session_routing",
+      "col": 2,
+      "type": "backend",
+      "label": "MCPSessionPool",
+      "sublabel": "Loop 隔离与 LRU 256",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/mcp/session_pool.py",
+          "line": 104,
+          "end_line": 160,
+          "label": "session_pool"
+        }
+      ]
+    },
+    {
+      "id": "transport_exec",
+      "lane": "transport_exec",
+      "col": 3,
+      "type": "messagebus",
+      "label": "多传输工具执行",
+      "sublabel": "Stdio 子进程 / SSE / HTTP",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/mcp/client.py",
+          "line": 1,
+          "end_line": 60,
+          "label": "build_servers_config"
+        }
+      ]
+    },
+    {
+      "id": "durable_driver",
+      "lane": "durable_task",
+      "col": 4,
+      "type": "backend",
+      "label": "McpTaskDriver",
+      "sublabel": "Submit 包装与本地 ID 映射",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/mcp/tasks/ordinary.py",
+          "line": 1,
+          "end_line": 50,
+          "label": "ordinary_task_driver"
+        }
+      ]
+    },
+    {
+      "id": "task_service",
+      "lane": "durable_task",
+      "col": 5,
+      "type": "messagebus",
+      "label": "McpTaskService",
+      "sublabel": "租约排他轮询与状态通知",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/app/mcp_tasks/service.py",
+          "line": 1,
+          "end_line": 60,
+          "label": "mcp_task_service"
+        }
+      ]
+    },
+    {
+      "id": "path_rewriter",
+      "lane": "transport_exec",
+      "col": 5,
+      "type": "backend",
+      "label": "工作区路径重写",
+      "sublabel": "映射至 /mnt/user-data/",
+      "width": 132,
+      "sources": [
+        {
+          "path": "backend/packages/harness/deerflow/mcp/tools.py",
+          "line": 52,
+          "end_line": 72,
+          "label": "local_path_rewriting"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_cfg_client",
+      "from": "mcp_config",
+      "to": "mcp_client",
+      "label": "加载声明配置",
+      "role": "main",
+      "variant": "default"
+    },
+    {
+      "id": "e_client_auth",
+      "from": "mcp_client",
+      "to": "auth_intercept",
+      "label": "挂载鉴权拦截器",
+      "role": "main",
+      "variant": "security"
+    },
+    {
+      "id": "e_auth_pool",
+      "from": "auth_intercept",
+      "to": "session_pool",
+      "label": "注入鉴权信息",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_pool_exec",
+      "from": "session_pool",
+      "to": "transport_exec",
+      "label": "分配会话运行调用",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_exec_path",
+      "from": "transport_exec",
+      "to": "path_rewriter",
+      "label": "返回结果路径转换",
+      "role": "main",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_exec_durable",
+      "from": "transport_exec",
+      "to": "durable_driver",
+      "label": "长任务提交包装",
+      "role": "branch",
+      "variant": "dashed"
+    },
+    {
+      "id": "e_durable_svc",
+      "from": "durable_driver",
+      "to": "task_service",
+      "label": "持久化 Handle 异步轮询",
+      "role": "async",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "会话池与进程隔离",
+      "items": [
+        "MCPSessionPool 以 (server, scope, loop) 为键实施三元组严格隔离",
+        "Stdio 工作目录限定在 thread workspace，临时目录隔离至 .mcp/tmp/",
+        "遇到连接断开错误时自动从活跃注册表中剔除并重建会话"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "异步长任务保障机制",
+      "items": [
+        "普通长任务将 submit/status/cancel 解耦，仅对模型暴露 submit",
+        "后台 McpTaskService 通过租约机制与每轮次 Token 锁防止竞争",
+        "任务到达 input_required 或终端状态后通过幂等 Agent 运行回传"
+      ]
+    }
+  ]
+}

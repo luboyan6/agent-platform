@@ -1,0 +1,394 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "skipped",
+  "type": "workflow",
+  "quality": "showcase",
+  "startedAt": "2026-10-01T05:44:41.990Z",
+  "specification": {
+    "path": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/candidate.json",
+    "sha256": "ba67b3fb216b2bee1a7468b68068ef843897908851acb10c0738a410c36665d4",
+    "bytes": 7783
+  },
+  "artifact": {
+    "path": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+    "sha256": "ce9a63d8b1004d1002a3b375b85df4a927acad985aba559c79c48f3080708ed0",
+    "bytes": 767287
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "/root/.nvm/versions/node/v26.8.1/bin/node",
+        "/root/.agents/skills/archify/bin/archify.mjs",
+        "deliver",
+        "workflow",
+        "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/candidate.json",
+        "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/root/workspace/agent-platform",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "ba67b3fb216b2bee1a7468b68068ef843897908851acb10c0738a410c36665d4",
+          "bytes": 7783
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 464,
+      "command": [
+        "/root/.nvm/versions/node/v26.8.1/bin/node",
+        "/root/.agents/skills/archify/bin/archify.mjs",
+        "deliver",
+        "workflow",
+        "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/candidate.json",
+        "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/root/workspace/agent-platform",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "bcca6065-b9cc-4083-b5d1-611bc0a708af",
+        "ok": true,
+        "command": "deliver",
+        "type": "workflow",
+        "input": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/candidate.json",
+        "output": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+        "specification": {
+          "sha256": "ba67b3fb216b2bee1a7468b68068ef843897908851acb10c0738a410c36665d4",
+          "bytes": 7783
+        },
+        "artifact": {
+          "sha256": "ce9a63d8b1004d1002a3b375b85df4a927acad985aba559c79c48f3080708ed0",
+          "bytes": 767287
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        },
+        "evidence": {
+          "verified": true,
+          "repository": "https://github.com/luboyan6/agent-platform",
+          "revision": "4c32f81d526efa5838bc86f16e6d506216877807",
+          "references": 8
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 170,
+      "command": [
+        "/root/.nvm/versions/node/v26.8.1/bin/node",
+        "/root/.agents/skills/archify/bin/archify.mjs",
+        "check",
+        "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+        "artifact": {
+          "sha256": "ce9a63d8b1004d1002a3b375b85df4a927acad985aba559c79c48f3080708ed0",
+          "bytes": 767287
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "showcase",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 0
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 0,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 30.1,
+            "desktopReadabilityIssues": 0,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 6.048780487804878,
+            "maxBends": 3,
+            "routesOverSuggestedBends": 1,
+            "maxStretch": 11.652,
+            "routesOverSuggestedStretch": 1,
+            "minSegmentPx": 16,
+            "minInteriorSegmentPx": 38,
+            "shortSegmentCount": 0,
+            "shortEndpointSegmentCount": 0,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [],
+            "detours": [
+              {
+                "relationship": {
+                  "id": "e_auth_pool",
+                  "from": "auth_intercept",
+                  "to": "session_pool",
+                  "label": "注入鉴权信息",
+                  "collectionIndex": 0,
+                  "artifactIndex": 1
+                },
+                "bends": 3,
+                "stretch": 1
+              },
+              {
+                "relationship": {
+                  "id": "e_client_auth",
+                  "from": "mcp_client",
+                  "to": "auth_intercept",
+                  "label": "挂载鉴权拦截器",
+                  "collectionIndex": 2,
+                  "artifactIndex": 3
+                },
+                "bends": 2,
+                "stretch": 11.652
+              }
+            ]
+          },
+          "leadingSpace": {
+            "measured": false,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "legacy-930",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 930,
+            "actualBudgetPx": 930,
+            "limit": "legacy",
+            "requestedTargetPx": null,
+            "requestedTargetMet": null,
+            "hardFloorPx": 6,
+            "hardFloorMet": true,
+            "minimumOwner": {
+              "kind": "node",
+              "id": "mcp_config"
+            },
+            "minimumSourceTextPx": 8,
+            "minimumProjectedTextPx": 6.048780487804878,
+            "semanticTextCount": 23
+          },
+          "issues": []
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "bcca6065-b9cc-4083-b5d1-611bc0a708af"
+      }
+    },
+    "browser-check": {
+      "status": "skipped",
+      "exitCode": 2,
+      "durationMs": 20,
+      "command": [
+        "/root/.nvm/versions/node/v26.8.1/bin/node",
+        "/root/.agents/skills/archify/bin/archify.mjs",
+        "browser-check",
+        "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+        "--json",
+        "--require-provenance"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "skipped",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "bcca6065-b9cc-4083-b5d1-611bc0a708af",
+        "artifact": {
+          "path": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html",
+          "sha256": "ce9a63d8b1004d1002a3b375b85df4a927acad985aba559c79c48f3080708ed0",
+          "bytes": 767287
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "unavailable",
+          "executable": null
+        },
+        "diagnostics": [
+          {
+            "code": "viewer/chrome-unavailable",
+            "severity": "warning",
+            "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+            "subject": {
+              "artifact": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html"
+            },
+            "evidence": {
+              "executable": null
+            },
+            "supportedFixes": [
+              "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+            ]
+          }
+        ],
+        "containment": {
+          "status": "skipped",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": []
+        },
+        "themeStates": {
+          "status": "skipped",
+          "viewports": []
+        },
+        "readability": {
+          "status": "skipped",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": []
+        },
+        "viewerChrome": {
+          "status": "skipped",
+          "viewports": []
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "receipt": "deerflow-mcp.browser-check.json",
+          "files": []
+        },
+        "error": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path."
+      }
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "viewer/chrome-unavailable",
+      "severity": "warning",
+      "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+      "subject": {
+        "artifact": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.html"
+      },
+      "evidence": {
+        "executable": null
+      },
+      "supportedFixes": [
+        "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.finalize.json",
+    "summaryReceipt": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.finalize-summary.json",
+    "browserCheckReceipt": "/root/workspace/agent-platform/.archify/workflow-deerflow-mcp-20261001-133600/deerflow-mcp.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "browser-check",
+  "finishedAt": "2026-10-01T05:44:44.410Z",
+  "durationMs": 2420,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.0.1",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-01T05:37:44.700Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

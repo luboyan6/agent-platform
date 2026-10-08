@@ -203,10 +203,18 @@ class McpOAuthConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class RagMcpAccessConfig(BaseModel):
+    """Explicit role grants for a fixed, read-only RAG endpoint."""
+
+    roles: list[Literal["admin", "user"]] = Field(default_factory=list)
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+
 class McpServerConfig(BaseModel):
     """Configuration for a single MCP server."""
 
     enabled: bool = Field(default=True, description="Whether this MCP server is enabled")
+    rag_access: RagMcpAccessConfig | None = Field(default=None, exclude_if=lambda value: value is None, description="Role grants for a fixed HTTP RAG endpoint; empty roles deny everyone")
     type: str = Field(default="stdio", description="Transport type: 'stdio', 'sse', or 'http'")
     command: str | None = Field(default=None, description="Command to execute to start the MCP server (for stdio type)")
     args: list[str] = Field(default_factory=list, description="Arguments to pass to the command (for stdio type)")
@@ -247,7 +255,28 @@ class McpServerConfig(BaseModel):
         default_factory=list,
         description="Ordinary submit/status/cancel tool groups managed by the durable MCP task runtime",
     )
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", hide_input_in_errors=True)
+
+    @field_validator("rag_access", mode="before")
+    @classmethod
+    def _reject_null_rag_access(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError("rag_access cannot be null; disable or delete the endpoint to retire it")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_rag_connection(self) -> "McpServerConfig":
+        if self.rag_access is not None:
+            from urllib.parse import urlsplit
+
+            endpoint = urlsplit(self.url or "")
+            if self.type != "http" or endpoint.scheme not in {"http", "https"} or not endpoint.netloc or endpoint.username is not None or endpoint.password is not None:
+                raise ValueError("rag_access requires an HTTP endpoint URL without embedded credentials")
+            if not self.tool_name_prefix or self.oauth or self.user_auth or self.headers_from_context or self.task_toolsets:
+                raise ValueError("rag_access requires prefixed tools and fixed credentials without OAuth, user/context credentials or durable tasks")
+            if not any(name.lower() == "authorization" and (value or not self.enabled) for name, value in self.headers.items()):
+                raise ValueError("rag_access requires a fixed Authorization header")
+        return self
 
     @field_validator("headers")
     @classmethod
@@ -391,7 +420,7 @@ class ExtensionsConfig(BaseModel):
         default_factory=dict,
         description="Map of skill name to state configuration",
     )
-    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    model_config = ConfigDict(extra="allow", populate_by_name=True, hide_input_in_errors=True)
 
     @field_validator("middlewares")
     @classmethod

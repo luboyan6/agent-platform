@@ -8,6 +8,7 @@ import pytest
 import sqlalchemy as sa
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateIndex
@@ -19,8 +20,40 @@ REVISION = "0027_fanwei_oidc_issuer"
 PREVIOUS = "0026_mcp_task_lease_tokens"
 
 
-def test_0027_is_the_chain_head():
-    assert bootstrap._get_head_revision() == REVISION
+def test_0027_joins_the_upstream_migration_chain():
+    script = ScriptDirectory(str(bootstrap._MIGRATIONS_DIR))
+    assert script.get_heads() == ["0034_merge_fanwei_main"]
+    assert script.get_revision(REVISION).down_revision == PREVIOUS
+    assert script.get_revision("0034_merge_fanwei_main").down_revision == (REVISION, "0033_batch_result_artifact")
+    assert all(len(revision.revision) <= 32 for revision in script.walk_revisions())
+
+
+@pytest.mark.parametrize("previous_head", [REVISION, "0033_batch_result_artifact"])
+def test_both_published_heads_upgrade_without_losing_users(tmp_path, previous_head):
+    engine = sa.create_engine(f"sqlite:///{tmp_path / 'merge.db'}")
+    script = ScriptDirectory(str(bootstrap._MIGRATIONS_DIR))
+
+    def upgrade(target):
+        with engine.begin() as conn:
+            context = MigrationContext.configure(conn, opts={"fn": lambda revisions, context: script._upgrade_revs(target, revisions), "render_as_batch": True})
+            with Operations.context(context), context.begin_transaction():
+                context.run_migrations()
+
+    try:
+        upgrade(previous_head)
+        with engine.begin() as conn:
+            conn.execute(sa.insert(UserRow).values(id="merge-user", email="merge@example.test"))
+
+        for _ in range(2):
+            upgrade("head")
+            with engine.connect() as conn:
+                assert conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one() == "0034_merge_fanwei_main"
+                assert conn.execute(sa.text("SELECT email FROM users WHERE id='merge-user'")).scalar_one() == "merge@example.test"
+                inspector = sa.inspect(conn)
+                assert "oauth_issuer" in {column["name"] for column in inspector.get_columns("users")}
+                assert "notification_deliveries" in inspector.get_table_names()
+    finally:
+        engine.dispose()
 
 
 def test_0027_adds_issuer_column_and_partial_identity_index(tmp_path):

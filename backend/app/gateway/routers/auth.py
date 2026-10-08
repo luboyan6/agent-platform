@@ -4,7 +4,6 @@ import asyncio
 import logging
 import os
 import re
-import secrets
 import time
 import urllib.parse
 from ipaddress import ip_address, ip_network
@@ -37,6 +36,7 @@ from app.gateway.auth.session_cookie_state import SKIP_AUTH_CSRF_COOKIE_STATE_AT
 from app.gateway.auth.user_provisioning import get_or_provision_oidc_user
 from app.gateway.csrf_middleware import CSRF_COOKIE_NAME, _request_origin, auth_csrf_cookie_settings, generate_csrf_token, is_secure_request
 from app.gateway.deps import get_current_user_from_request, get_local_provider
+from app.gateway.utils import constant_time_equals
 from deerflow.config.auth_config import OIDCProviderConfig
 
 logger = logging.getLogger(__name__)
@@ -1042,7 +1042,7 @@ async def oauth_callback(
     if not state_payload:
         return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
 
-    if not secrets.compare_digest(state_payload.state, state):
+    if not constant_time_equals(state_payload.state, state):
         return _oidc_callback_error_response(request, provider, oidc_config.frontend_base_url)
 
     # ── Resolve redirect URI ─────────────────────────────────────────

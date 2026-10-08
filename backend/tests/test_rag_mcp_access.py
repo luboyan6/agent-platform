@@ -298,8 +298,8 @@ async def test_gateway_reads_current_accounts_across_worker_loops(policy, accoun
     async with gateway_access.rag_mcp_authority():
         assert await asyncio.to_thread(lambda: asyncio.run(guard(req, transport))) == "ok"
         if revocation == "demote":
-            user.system_role = "user"
-            await repository.update_user(user)
+            await repository.create_user(User(email="remaining-admin@example.com", system_role="admin"))
+            await repository.update_system_role(owner, "user")
         elif revocation == "delete":
             async with sessions() as session:
                 await session.execute(delete(UserRow).where(UserRow.id == owner))

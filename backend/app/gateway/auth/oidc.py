@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import re
-import secrets
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -19,6 +18,7 @@ import jwt
 from jwt import PyJWK
 
 from app.gateway.auth.oidc_adapters import FanweiProfileError, normalize_fanwei_profile
+from app.gateway.utils import constant_time_equals
 
 logger = logging.getLogger(__name__)
 
@@ -385,7 +385,16 @@ class OIDCService:
             token_nonce = claims.get("nonce")
             if not token_nonce:
                 raise OIDCValidationError("ID token is missing the nonce claim")
-            if not _constant_time_compare(nonce, token_nonce):
+            # A non-string claim is malformed the same way: comparing it would
+            # raise AttributeError inside the shared helper, so reject it here
+            # to keep the sso_failed redirect contract.
+            if not isinstance(token_nonce, str):
+                raise OIDCValidationError("ID token nonce claim is not a string")
+            # The nonce claim is provider-controlled text; the shared comparison
+            # encodes before comparing so non-ASCII content rejects instead of
+            # raising TypeError (which the callback turns into a 500, not the
+            # sso_failed redirect an OIDCValidationError produces).
+            if not constant_time_equals(nonce, token_nonce):
                 raise OIDCValidationError("ID token nonce does not match")
 
         return claims
@@ -535,8 +544,3 @@ class OIDCService:
             claims=merged,
             issuer=metadata.issuer,
         )
-
-
-def _constant_time_compare(a: str, b: str) -> bool:
-    """Constant-time string comparison."""
-    return secrets.compare_digest(a, b)

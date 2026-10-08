@@ -114,7 +114,11 @@ async def test_bootstrap_claim_tokens_preserves_existing_scheduler_and_outbox(tm
         async with engine.connect() as conn:
             columns = await conn.run_sync(lambda sync: {col["name"] for col in sa.inspect(sync).get_columns(TABLE)})
             assert "claim_token" not in columns
-            assert (await conn.execute(sa.text("SELECT version_num FROM alembic_version"))).scalar_one() == SCHEDULER
+            revisions = set((await conn.execute(sa.text("SELECT version_num FROM alembic_version"))).scalars())
+            assert revisions == {SCHEDULER, "0027_fanwei_oidc_issuer"}
+        # A branch-only downgrade keeps the independent OIDC stamp. Rejoin
+        # through Alembic before the single-head startup validation.
+        await asyncio.to_thread(command.upgrade, cfg, HEAD)
         await bootstrap.bootstrap_schema(engine, backend="sqlite")
         await assert_preserved()
     finally:

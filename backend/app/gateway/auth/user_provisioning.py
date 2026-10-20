@@ -13,11 +13,20 @@ import logging
 from fastapi import HTTPException, status
 
 from app.gateway.auth.local_provider import LocalAuthProvider
+from app.gateway.auth.models import User
 from app.gateway.auth.oidc import OIDCIdentity
 from app.gateway.auth.oidc_adapters import derive_shadow_email
 from deerflow.config.auth_config import OIDCProviderConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_user_enabled(user: User) -> None:
+    if getattr(user, "disabled", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been disabled. Please contact your administrator.",
+        )
 
 
 async def get_or_provision_oidc_user(
@@ -44,6 +53,7 @@ async def get_or_provision_oidc_user(
     if issuer:
         existing = await local_provider.get_user_by_oidc(issuer, identity.subject)
         if existing:
+            _ensure_user_enabled(existing)
             return {"user": existing, "created": False}
 
     legacy = await local_provider.get_user_by_oauth(provider_id, identity.subject)
@@ -52,6 +62,7 @@ async def get_or_provision_oidc_user(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="OIDC identity mapping conflict")
         if provider_config.adapter == "fanwei_e10":
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Unverified legacy OIDC mapping conflict")
+        _ensure_user_enabled(legacy)
         return {"user": legacy, "created": False}
 
     if provider_config.adapter == "fanwei_e10":
@@ -61,6 +72,7 @@ async def get_or_provision_oidc_user(
         if await local_provider.get_user_by_email(email):
             winner = await local_provider.get_user_by_oidc(issuer, identity.subject)
             if winner:
+                _ensure_user_enabled(winner)
                 return {"user": winner, "created": False}
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="OIDC shadow email already belongs to another account")
         try:
@@ -74,6 +86,7 @@ async def get_or_provision_oidc_user(
         except ValueError:
             winner = await local_provider.get_user_by_oidc(issuer, identity.subject)
             if winner:
+                _ensure_user_enabled(winner)
                 return {"user": winner, "created": False}
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="OIDC identity mapping conflict") from None
         logger.info("Auto-created OIDC user (provider=%s, role=user)", provider_id)
@@ -139,6 +152,7 @@ async def get_or_provision_oidc_user(
         # otherwise the email now belongs to a different account → 409.
         existing = await local_provider.get_user_by_oidc(issuer, identity.subject) if issuer else await local_provider.get_user_by_oauth(provider_id, identity.subject)
         if existing:
+            _ensure_user_enabled(existing)
             return {"user": existing, "created": False}
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

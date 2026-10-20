@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
 from support.shell import require_script_bash
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -53,19 +54,19 @@ def test_serve_renders_nginx_for_configured_frontend_port() -> None:
     serve = SERVE_SH.read_text(encoding="utf-8")
 
     assert 'DEER_FLOW_FRONTEND_PORT="${DEER_FLOW_FRONTEND_PORT:-3000}"' in serve
-    assert 'LOCAL_NGINX_CONFIG="$REPO_ROOT/temp/nginx.local.conf"' in serve
-    assert "server 127\\\\.0\\\\.0\\\\.1:3000;" in serve
-    assert "server 127.0.0.1:${DEER_FLOW_FRONTEND_PORT};" in serve
+    assert 'NGINX_CONF="$(bash "$REPO_ROOT/scripts/nginx-local-conf.sh")"' in serve
 
 
-def test_nginx_standalone_renders_config_from_dotenv(tmp_path: Path) -> None:
+@pytest.mark.parametrize("bind_host", ["127.0.0.1", "0.0.0.0", "::1"])
+def test_nginx_standalone_renders_config_from_dotenv(tmp_path: Path, bind_host: str) -> None:
     bash = require_script_bash()
     worktree = tmp_path / "repo"
     scripts_dir = worktree / "scripts"
     scripts_dir.mkdir(parents=True)
     shutil.copy(NGINX_SH, scripts_dir / "nginx.sh")
+    shutil.copy(REPO_ROOT / "scripts" / "nginx-local-conf.sh", scripts_dir / "nginx-local-conf.sh")
     shutil.copytree(REPO_ROOT / "docker" / "nginx", worktree / "docker" / "nginx")
-    (worktree / ".env").write_text("PORT=8080\nDEER_FLOW_FRONTEND_PORT=3100\n", encoding="utf-8")
+    (worktree / ".env").write_text(f"PORT=8080\nDEER_FLOW_FRONTEND_PORT=3100\nBIND_HOST={bind_host}\n", encoding="utf-8")
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -90,6 +91,13 @@ def test_nginx_standalone_renders_config_from_dotenv(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     rendered = (worktree / "temp" / "nginx.local.conf").read_text(encoding="utf-8")
     assert "server 127.0.0.1:3100;" in rendered
-    assert "listen 8080;" in rendered
-    assert "listen [::]:8080;" in rendered
+    if bind_host == "127.0.0.1":
+        assert "listen 127.0.0.1:8080;" in rendered
+        assert "listen [::1]:8080;" in rendered
+    elif bind_host == "0.0.0.0":
+        assert "listen 8080;" in rendered
+        assert "listen [::]:8080;" in rendered
+    else:
+        assert "listen [::1]:8080;" in rendered
+        assert "listen 127.0.0.1:" not in rendered
     assert "-c" in captured_args.read_text(encoding="utf-8")

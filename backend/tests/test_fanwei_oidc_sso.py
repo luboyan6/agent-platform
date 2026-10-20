@@ -573,6 +573,26 @@ async def test_fanwei_reuses_same_issuer_subject_after_profile_changes():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("lookup", ["existing", "shadow_email", "create_race"])
+async def test_fanwei_rejects_disabled_identity_including_concurrent_creation(lookup):
+    identity = _fanwei_identity()
+    disabled = User(email=derive_shadow_email(_SHADOW_SECRET, _ISSUER, identity.subject), oauth_provider="fanwei", oauth_issuer=_ISSUER, oauth_id=identity.subject, disabled=True)
+    local_provider = AsyncMock()
+    local_provider.get_user_by_oidc.side_effect = [disabled] if lookup == "existing" else [None, disabled]
+    local_provider.get_user_by_oauth.return_value = None
+    local_provider.get_user_by_email.return_value = disabled if lookup == "shadow_email" else None
+    local_provider.create_oauth_user.side_effect = ValueError("OAuth identity already exists")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_or_provision_oidc_user("fanwei", _fanwei_config(), identity, local_provider)
+
+    assert exc_info.value.status_code == 403
+    assert "disabled" in exc_info.value.detail
+    if lookup != "create_race":
+        local_provider.create_oauth_user.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_fanwei_retargeted_provider_key_with_different_issuer_is_a_conflict():
     existing = User(email="legacy@sso.example", password_hash=None, oauth_provider="fanwei", oauth_issuer="https://old-oa.example.test/oidc", oauth_id="stable-oa-subject")
     local_provider = AsyncMock()

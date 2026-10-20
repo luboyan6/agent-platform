@@ -49,39 +49,6 @@ fi
 mkdir -p logs
 mkdir -p temp/client_body_temp temp/proxy_temp temp/fastcgi_temp temp/uwsgi_temp temp/scgi_temp
 
-DEER_FLOW_NGINX_PORT="${PORT:-2026}"
-case "$DEER_FLOW_NGINX_PORT" in
-    "" | *[!0-9]*)
-        echo "PORT must be a numeric TCP port." >&2
-        exit 1
-        ;;
-esac
-if [ "$DEER_FLOW_NGINX_PORT" -lt 1 ] || [ "$DEER_FLOW_NGINX_PORT" -gt 65535 ]; then
-    echo "PORT must be between 1 and 65535." >&2
-    exit 1
-fi
-
-DEER_FLOW_FRONTEND_PORT="${DEER_FLOW_FRONTEND_PORT:-3000}"
-case "$DEER_FLOW_FRONTEND_PORT" in
-    "" | *[!0-9]*)
-        echo "DEER_FLOW_FRONTEND_PORT must be a numeric TCP port." >&2
-        exit 1
-        ;;
-esac
-if [ "$DEER_FLOW_FRONTEND_PORT" -lt 1 ] || [ "$DEER_FLOW_FRONTEND_PORT" -gt 65535 ]; then
-    echo "DEER_FLOW_FRONTEND_PORT must be between 1 and 65535." >&2
-    exit 1
-fi
-
-LOCAL_NGINX_CONFIG="$REPO_ROOT/docker/nginx/nginx.local.conf"
-if [ "$DEER_FLOW_FRONTEND_PORT" != "3000" ] || [ "$DEER_FLOW_NGINX_PORT" != "2026" ]; then
-    LOCAL_NGINX_CONFIG="$REPO_ROOT/temp/nginx.local.conf"
-    sed \
-        -e "s/server 127\\.0\\.0\\.1:3000;/server 127.0.0.1:${DEER_FLOW_FRONTEND_PORT};/" \
-        -e "s/listen 2026;/listen ${DEER_FLOW_NGINX_PORT};/" \
-        -e "s/listen \\[::\\]:2026;/listen [::]:${DEER_FLOW_NGINX_PORT};/" \
-        "$REPO_ROOT/docker/nginx/nginx.local.conf" > "$LOCAL_NGINX_CONFIG"
-fi
-
+NGINX_CONF="$(bash "$REPO_ROOT/scripts/nginx-local-conf.sh")"
 NGINX_RUN_USER="$(id -un)"
-exec nginx -g "user $NGINX_RUN_USER; daemon off;" -c "$LOCAL_NGINX_CONFIG" -p "$REPO_ROOT"
+exec nginx -g "user $NGINX_RUN_USER; daemon off;" -c "$NGINX_CONF" -p "$REPO_ROOT"

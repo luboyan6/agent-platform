@@ -35,6 +35,19 @@ rs.mock("@/core/models/hooks", () => ({
   }),
 }));
 
+// Permission gating does not depend on the stream transport or history API.
+rs.mock("@/core/threads/hooks", () => ({
+  useDeleteThread: () => ({ mutateAsync: rs.fn(), isPending: false }),
+  useThreadStream: () => ({
+    thread: { isLoading: false, messages: [], values: {} },
+    sendMessage: rs.fn(),
+    isUploading: false,
+    isHistoryLoading: false,
+    hasMoreHistory: false,
+    loadMoreHistory: rs.fn(),
+  }),
+}));
+
 function makeUser(permissions: string[] | null | undefined): User {
   return {
     id: "user-1",

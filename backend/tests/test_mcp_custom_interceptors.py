@@ -13,7 +13,7 @@ from deerflow.mcp.tools import get_mcp_tools
 def isolate_custom_interceptors(monkeypatch):
     # Mandatory RAG admission is covered by test_rag_mcp_access; this suite
     # isolates custom/OAuth interceptor registration and ordering.
-    monkeypatch.setattr("deerflow.mcp.interceptors.build_rag_access_interceptor", lambda config: None)
+    monkeypatch.setattr("deerflow.mcp.interceptors.build_rag_access_interceptor", lambda config: None, raising=False)
 
 
 def _make_patches(*, interceptor_paths=None):

@@ -4,6 +4,46 @@
     "my_package.mcp.auth:build_auth_interceptor"
   ],
   "mcpServers": {
+    "weknora-ai": {
+      "enabled": false,
+      "type": "http",
+      "url": "http://localhost:5173/mcp/c757cd89-a364-4dcf-b7b5-59803f01026e",
+      "headers": {"Authorization": "$WEKNORA_FINANCE_AUTHORIZATION"},
+      "tool_name_prefix": true,
+      "session_init_timeout": 30,
+      "description": "AI 知识点问答知识库，用于 AI 知识检索与问答。",
+      "routing": {
+        "mode": "prefer",
+        "priority": 95,
+        "keywords": [
+          "AI知识点问答",
+          "AI知识点",
+          "人工智能知识",
+          "财务知识库",
+          "财务问答"
+        ]
+      }
+    },
+    "weknora-mcp": {
+      "enabled": false,
+      "type": "http",
+      "url": "http://localhost:5173/mcp/7f9a1def-67a8-4808-ba84-5895c3e1dc23",
+      "headers": {"Authorization": "$WEKNORA_AFTERSALES_AUTHORIZATION"},
+      "tool_name_prefix": true,
+      "session_init_timeout": 30,
+      "description": "需求说明知识库，用于需求检索与售后问答。",
+      "routing": {
+        "mode": "prefer",
+        "priority": 95,
+        "keywords": [
+          "需求说明",
+          "需求文档",
+          "需求查询",
+          "售后知识库",
+          "售后问答"
+        ]
+      }
+    },
     "rag_common": {
       "enabled": false,
       "type": "http",

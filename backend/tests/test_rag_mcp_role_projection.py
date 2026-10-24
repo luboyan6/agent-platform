@@ -28,9 +28,9 @@ def tool(alias, original):
 def test_projection_independent_of_general_auth_and_catalog_mutation(policy, role, source, expected):
     items = [tool("reader", "search_knowledge"), tool("restricted", "search_knowledge"), tool("reader", "delete_knowledge_base"), tool("legacy", "anything")]
     original_metadata = [dict(item.metadata) for item in items]
-    projected, provider = apply_tool_authorization(items, context=actor(role, source), app_config=SimpleNamespace(authorization=SimpleNamespace(enabled=False)))
+    # Retained RAG projection is tested explicitly; production uses native RBAC.
+    projected = rag_access.project_rag_tools(items, actor(role, source))
     assert [item.name for item in projected] == expected + ["legacy_anything"]
-    assert provider is None
     assert len(items) == 4
     assert [item.metadata for item in items] == original_metadata
     # A different user can build from the same shared catalog.
@@ -51,7 +51,8 @@ def test_general_authorization_can_only_narrow_rag_grants(policy):
     config = SimpleNamespace(
         authorization=AuthorizationConfig(enabled=True, provider=AuthorizationProviderConfig(use="deerflow.authz.rbac:RbacAuthorizationProvider", config={"roles": {"user": {"tools": {"allow": ["restricted_search_knowledge"]}}}}))
     )
-    projected, provider = apply_tool_authorization([tool("reader", "search_knowledge"), tool("restricted", "search_knowledge")], context=actor(), app_config=config)
+    rag_tools = rag_access.project_rag_tools([tool("reader", "search_knowledge"), tool("restricted", "search_knowledge")], actor())
+    projected, provider = apply_tool_authorization(rag_tools, context=actor(), app_config=config)
     assert projected == []
     assert provider is not None
 

@@ -9,9 +9,11 @@ from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.mcp.config_normalization import normalize_mcp_interceptor_paths
 from deerflow.mcp.context_headers import build_context_headers_interceptor
 from deerflow.mcp.oauth import build_oauth_tool_interceptor
-from deerflow.mcp.rag_access import build_rag_access_interceptor
 from deerflow.mcp.user_scoped_auth import build_user_scoped_auth_interceptor
 from deerflow.reflection import resolve_variable
+
+# RAG-specific admission suspended for native RBAC MCP role tests.
+# from deerflow.mcp.rag_access import build_rag_access_interceptor
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ def build_mcp_tool_interceptors(
     resolver: Any = resolve_variable,
     target_logger: logging.Logger = logger,
 ) -> list[Any]:
-    """Build credential/custom interceptors followed by mandatory RAG admission."""
+    """Build credential/custom interceptors; native RBAC gates tool execution."""
     interceptors: list[Any] = []
     oauth_interceptor = oauth_builder(extensions_config)
     if oauth_interceptor is not None:
@@ -72,11 +74,10 @@ def build_mcp_tool_interceptors(
                 f"Failed to load MCP interceptor {interceptor_path}",
                 exc_info=True,
             )
-    # Always last: inspect the final tool name, arguments and header overrides.
-    # An optional custom interceptor failing to load cannot remove this guard.
-    rag_guard = build_rag_access_interceptor(extensions_config)
-    if rag_guard is not None:
-        interceptors.append(rag_guard)
+    # October 3 RAG admission suspended: use native RBAC for MCP role tests.
+    # rag_guard = build_rag_access_interceptor(extensions_config)
+    # if rag_guard is not None:
+    #     interceptors.append(rag_guard)
     return interceptors
 
 

@@ -1494,35 +1494,41 @@ class TestAgentConstruction:
         assert executor._authz_provider is not None
 
     @pytest.mark.anyio
-    async def test_build_initial_state_filters_rag_before_deferred_discovery(self, classes, base_config, monkeypatch):
+    @pytest.mark.parametrize("role,allowed,denied", [("finance", "weknora-ai", "weknora-mcp"), ("aftersales", "weknora-mcp", "weknora-ai")])
+    async def test_build_initial_state_filters_native_mcp_roles_before_deferred_discovery(self, classes, base_config, monkeypatch, role, allowed, denied):
         from langchain_core.tools import StructuredTool
 
-        from deerflow.config.extensions_config import ExtensionsConfig
-        from deerflow.mcp import rag_access
+        from deerflow.authz import tool_filter
+        from deerflow.config.authorization_config import AuthorizationConfig, AuthorizationProviderConfig
         from deerflow.tools.mcp_metadata import tag_mcp_tool
 
-        config = ExtensionsConfig.model_validate(
-            {"mcpServers": {name: {"type": "http", "url": "http://localhost/mcp", "headers": {"Authorization": "Bearer fixture"}, "rag_access": {"roles": [role]}} for name, role in (("reader", "user"), ("restricted", "admin"))}}
-        )
+        native_filter = tool_filter.apply_tool_authorization
 
-        def read_policy_off_loop():
+        def filter_off_loop(*args, **kwargs):
             with pytest.raises(RuntimeError, match="no running event loop"):
                 asyncio.get_running_loop()
-            return config
+            return native_filter(*args, **kwargs)
 
-        monkeypatch.setattr(rag_access, "read_rag_policy", read_policy_off_loop)
-        monkeypatch.setattr(rag_access, "_protected_aliases", frozenset(config.mcp_servers))
+        monkeypatch.setattr(tool_filter, "apply_tool_authorization", filter_off_loop)
         monkeypatch.setattr(sys.modules["deerflow.skills.storage"], "get_or_new_user_skill_storage", lambda user_id, *, app_config=None: SimpleNamespace(load_skills=lambda *, enabled_only: []))
         tools = [
-            tag_mcp_tool(StructuredTool.from_function(lambda: "fixture", name=f"{alias}_search_knowledge", description="fixture"), server_name=alias, transport="http", original_tool_name="search_knowledge") for alias in config.mcp_servers
+            tag_mcp_tool(StructuredTool.from_function(lambda: "fixture", name=f"{alias}_search_knowledge", description="fixture"), server_name=alias, transport="http", original_tool_name="search_knowledge")
+            for alias in ("weknora-ai", "weknora-mcp")
         ]
         app_config = _default_app_config()
         app_config.tool_search.enabled = True
-        executor = classes["SubagentExecutor"](config=base_config, tools=tools, app_config=app_config, parent_model="test-model", user_id="actor", user_role="user", authz_attributes={"auth_source": "session"}, thread_id="rag-thread")
+        app_config.authorization = AuthorizationConfig(
+            enabled=True,
+            default_role="finance",
+            provider=AuthorizationProviderConfig(
+                use="deerflow.authz.rbac:RbacAuthorizationProvider", config={"roles": {"finance": {"tools": {"allow": ["weknora-ai_search_knowledge"]}}, "aftersales": {"tools": {"allow": ["weknora-mcp_search_knowledge"]}}}}
+            ),
+        )
+        executor = classes["SubagentExecutor"](config=base_config, tools=tools, app_config=app_config, parent_model="test-model", user_id="actor", user_role=role, authz_attributes={"auth_source": "session"}, thread_id="rbac-thread")
         state, final_tools, deferred_setup = await executor._build_initial_state("Search permitted sources")
-        assert [tool.name for tool in final_tools] == ["reader_search_knowledge", "tool_search"]
-        assert deferred_setup.deferred_names == frozenset({"reader_search_knowledge"})
-        assert "restricted_search_knowledge" not in state["messages"][0].content
+        assert [tool.name for tool in final_tools] == [f"{allowed}_search_knowledge", "tool_search"]
+        assert deferred_setup.deferred_names == frozenset({f"{allowed}_search_knowledge"})
+        assert f"{denied}_search_knowledge" not in state["messages"][0].content
 
     @pytest.mark.anyio
     async def test_build_initial_state_deferral_respects_tool_policy_and_tool_search_is_infra(

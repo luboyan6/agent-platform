@@ -492,8 +492,8 @@ def test_mapping_values_are_not_env_resolved(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_request_secrets_follow_other_credentials_before_rag_admission():
-    """Per-request credentials still win; RAG admission inspects final headers."""
+def test_request_secrets_follow_other_credentials_in_native_rbac_mode():
+    """Per-request credentials still win while the RAG guard is suspended."""
     config = _config(headers={"Authorization": "tenant_token"})
     config.mcp_servers["shared-http"].user_auth = McpUserScopedAuthConfig(users={"u1": "Bearer per-user"})
 
@@ -505,16 +505,15 @@ def test_request_secrets_follow_other_credentials_before_rag_admission():
         "oauth",
         "user_scoped_auth_interceptor",
         "context_headers_interceptor",
-        "guard",
     ]
 
 
-def test_shared_assembly_keeps_rag_guard_without_context_auth():
+def test_shared_assembly_has_no_rag_guard_without_context_auth():
     config = ExtensionsConfig(
         mcp_servers={"plain": McpServerConfig(enabled=True, type="http", url="https://x.example.com")},
         skills={},
     )
-    assert [interceptor.__name__ for interceptor in build_mcp_tool_interceptors(config, oauth_builder=lambda _cfg: None)] == ["guard"]
+    assert build_mcp_tool_interceptors(config, oauth_builder=lambda _cfg: None) == []
 
 
 # ---------------------------------------------------------------------------

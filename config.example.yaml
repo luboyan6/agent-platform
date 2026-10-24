@@ -3352,6 +3352,11 @@ run_ownership:
 # ============================================================================
 # Authorization Configuration
 # ============================================================================
+# Native RBAC finance/aftersales MCP test roles: merge the role fragment from
+# config.native-rbac-mcp.example.yaml and use the weknora-ai/weknora-mcp entries
+# in extensions_config.example.json. RAG-specific runtime guards are currently
+# suspended; rag_access does not enforce these connections. Exact tool names
+# must be allowed/denied through native policies; mcp_servers alone is insufficient.
 # Fine-grained resource authorization (RBAC and beyond). Disabled by default;
 # every authenticated user has access to all resources.
 # See RFC: https://github.com/bytedance/deer-flow/issues/4063

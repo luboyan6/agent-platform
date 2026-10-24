@@ -1,5 +1,10 @@
 # Role-scoped RAG MCP access
 
+> Historical/retained implementation: its four runtime integration points are
+> currently commented out for the [native RBAC MCP role test](NATIVE_RBAC_MCP_TEST.md).
+> The contracts below describe the retained implementation, not active runtime
+> enforcement. A `rag_access` field alone currently provides no RAG admission.
+
 This pilot uses several logical MCP endpoints on the existing RAG deployment.
 Each endpoint has its own fixed credential, explicit knowledge-base scope and
 retrieval/QA tool allowlist. Agent selects permitted endpoints using the current

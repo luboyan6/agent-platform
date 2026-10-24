@@ -193,6 +193,12 @@ async def test_live_policy_added_after_tool_construction_is_enforced(policy):
 
 @pytest.mark.asyncio
 async def test_discovered_native_adapter_tools_parallel_and_fresh_ask(policy, monkeypatch):
+    # Opt into the retained RAG guard/schema wrapper explicitly. Production
+    # assembly suspends both while native RBAC is being tested.
+    def retained_interceptors(config, **kwargs):
+        return [*build_mcp_tool_interceptors(config, **kwargs), rag_access.build_rag_access_interceptor(config)]
+
+    monkeypatch.setattr("deerflow.mcp.tools.build_mcp_tool_interceptors", retained_interceptors)
     business_calls, opened = [], []
 
     class Client:
@@ -236,7 +242,7 @@ async def test_discovered_native_adapter_tools_parallel_and_fresh_ask(policy, mo
 
     monkeypatch.setattr("langchain_mcp_adapters.client.MultiServerMCPClient", Client)
     monkeypatch.setattr("langchain_mcp_adapters.tools.create_session", SessionContext)
-    tools = await get_mcp_tools()
+    tools = [rag_access.stateless_rag_tool(tool, tool.name.split("_", 1)[1]) for tool in await get_mcp_tools()]
     ask = next(tool for tool in tools if tool.name == "reader_ask")
     assert "session_id" not in ask.args_schema["properties"]
     assert "Reuse session_id" not in ask.description
@@ -319,7 +325,7 @@ def test_bad_resolved_headers_never_expose_fixture_secret(policy, caplog):
     data["mcpServers"]["reader"]["headers"]["Authorization"] = secret
     atomic_write_extensions_config(path, data)
     with pytest.raises(ToolException) as exc:
-        build_mcp_tool_interceptors(ExtensionsConfig.from_file())
+        rag_access.build_rag_access_interceptor(ExtensionsConfig.from_file())
     assert "private-fixture" not in str(exc.value) + caplog.text
 
 
@@ -408,7 +414,7 @@ async def test_failed_optional_custom_interceptor_cannot_remove_guard(policy):
     def unavailable(path):
         raise ImportError("fixture builder absent")
 
-    chain = build_mcp_tool_interceptors(config, resolver=unavailable)
+    chain = [*build_mcp_tool_interceptors(config, resolver=unavailable), rag_access.build_rag_access_interceptor(config)]
     transport = AsyncMock()
     with pytest.raises(ToolException, match="RAG_ACCESS_DENIED"):
         await compose_tool_interceptors(chain, transport)(request("restricted"))

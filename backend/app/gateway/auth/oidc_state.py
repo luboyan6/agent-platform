@@ -52,6 +52,8 @@ def _verify_state_signed(signed: str, max_age: int = OIDC_STATE_MAX_AGE) -> OIDC
             return None
         return payload
     except (jwt.PyJWTError, ValidationError):
+        # A state cookie signed with our secret but missing required claims is not a server error:
+        # it is an unusable state, and the callback must answer 403 rather than 500.
         return None
 
 

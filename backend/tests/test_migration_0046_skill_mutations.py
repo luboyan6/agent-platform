@@ -1,4 +1,4 @@
-"""Additive Skill host schema; the head pin lives in test_migration_0047_merge_fanwei_main."""
+"""Additive Skill host schema; the head pin lives in test_migration_0049_merge_fanwei_main."""
 
 import asyncio
 
@@ -18,6 +18,7 @@ TABLES = {"skill_mutation_assets", "skill_mutation_owners", "skill_mutation_prop
 def test_0046_remains_in_the_single_migration_chain():
     script = ScriptDirectory(str(bootstrap._MIGRATIONS_DIR))
     assert len(script.get_heads()) == 1
+    assert script.get_revision("0047_mcp_oauth_tokens").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == "0045_completed_run_evidence"
     assert script.get_revision("0045_completed_run_evidence").down_revision == "0044_channel_runtime_configs"
     assert script.get_revision("0044_channel_runtime_configs").down_revision == "0043_runtime_im_notices"

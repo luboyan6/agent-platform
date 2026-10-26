@@ -2,7 +2,7 @@
 
 Adds the nullable per-claim token columns ``McpTaskRepository`` uses to fence
 poll, cancel, and notification mutations to the exact claim generation. The
-chain-head pin lives in ``test_migration_0047_merge_fanwei_main``.
+chain-head pin lives in ``test_migration_0049_merge_fanwei_main``.
 """
 
 from __future__ import annotations

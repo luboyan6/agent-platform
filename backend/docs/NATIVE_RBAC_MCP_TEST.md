@@ -1,9 +1,8 @@
 # Native RBAC MCP role test
 
-The October 3 RAG-specific runtime integration is temporarily commented out.
-`rag_access` schemas and standalone functions remain for restoration, but they
-do not filter catalogs, authorize transport, adapt `ask`, or refresh account
-roles in the running application. Use enabled native RBAC for this test.
+The superseded October 3 RAG-specific implementation, commented integration
+blocks and `rag_access` configuration schema have been removed. MCP catalog
+filtering and execution authorization use enabled native RBAC.
 
 | Account role | MCP alias | Knowledge-base label |
 | --- | --- | --- |
@@ -12,8 +11,7 @@ roles in the running application. Use enabled native RBAC for this test.
 
 The endpoint URLs are in the corresponding entries of
 `extensions_config.example.json`. They use HTTP with tool-name prefixes. The
-examples are disabled; the local test configuration enables both. Neither new
-entry has `rag_access`.
+examples are disabled; the local test configuration enables both.
 
 Both entries use a 30-second discovery/initialization timeout, Chinese purpose
 descriptions and `routing: {mode: prefer, priority: 95}` with knowledge-base
@@ -319,20 +317,14 @@ Debug，也可在那里检查。仅保留角色、工具名、成功/拒绝状�
 
 The offline suite `tests/test_native_rbac_mcp_roles.py` separately uses synthetic
 tools to check catalog hiding and execution denial, including deliberate calls
-to forbidden registered tools. Existing RAG tests opt into retained functions
-explicitly and do not demonstrate active production protection.
+to forbidden registered tools, with zero forbidden transport calls.
 
-## Limits and restoration
+## Authorization limits
 
 Native authorization uses the trusted runtime principal and provider instance.
-It does not retain the suspended RAG guard's fresh per-call account lookup,
+It does not implement fresh per-call account lookup,
 fixed endpoint credential binding, web-session-only admission, retrieval-only
 transport allowlist or mandatory fresh `ask` session. Direct tool invocation
 outside the authenticated Agent middleware is not protected by the native
 execution layer. Endpoint bearer authentication and WeKnora scope enforcement
 remain separate. This test does not establish complete production KB isolation.
-
-Restore the four commented blocks in `authz/tool_filter.py`,
-`mcp/interceptors.py`, `mcp/tools.py` and `app/gateway/app.py` only together with
-compatible endpoint ACLs. The retained RAG schema/guard still accepts only
-admin/user; restoring it unchanged will not authorize finance/aftersales.

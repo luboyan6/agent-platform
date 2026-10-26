@@ -1,12 +1,10 @@
 ### MCP System (`packages/harness/deerflow/mcp/`)
 
-- **Native RBAC test mode**: October 3 RAG integration is commented out in
-  `authz/tool_filter.py`, `mcp/interceptors.py`, `mcp/tools.py` and Gateway lifespan.
-  `rag_access` remains schema-compatible but provides no runtime admission or
-  stateless QA adaptation. Finance/aftersales use exact prefixed `tools` policies
+- **Native RBAC**: The superseded October 3 RAG-specific implementation and
+  configuration schema have been removed. Finance/aftersales use exact prefixed `tools` policies
   in enabled native RBAC, enforced by catalog filtering and the native guardrail
   adapter; `mcp_servers` policies alone do not gate tool execution. Preserve
-  ordinary subagent filtering. Test/config/secrets/restore contract:
+  ordinary subagent filtering. Test/config/secrets contract:
   [NATIVE_RBAC_MCP_TEST.md](../../../../docs/NATIVE_RBAC_MCP_TEST.md).
 
 Poll and cancel snapshot writes rejected by the ownership fence log the discard;

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 
 import pytest
@@ -11,6 +12,7 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.schema import CreateIndex
 
 from deerflow.persistence import bootstrap
@@ -22,13 +24,13 @@ PREVIOUS = "0026_mcp_task_lease_tokens"
 
 def test_0027_joins_the_upstream_migration_chain():
     script = ScriptDirectory(str(bootstrap._MIGRATIONS_DIR))
-    assert script.get_heads() == ["0047_merge_fanwei_main"]
+    assert script.get_revision("0047_merge_fanwei_main").down_revision == ("0034_merge_fanwei_main", "0046_skill_mutations")
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     assert script.get_revision("0034_merge_fanwei_main").down_revision == (REVISION, "0033_batch_result_artifact")
     assert all(len(revision.revision) <= 32 for revision in script.walk_revisions())
 
 
-@pytest.mark.parametrize("previous_head", [REVISION, "0033_batch_result_artifact", "0034_merge_fanwei_main", "0046_skill_mutations"])
+@pytest.mark.parametrize("previous_head", [REVISION, "0033_batch_result_artifact", "0034_merge_fanwei_main", "0046_skill_mutations", "0047_merge_fanwei_main", "0049_merge_fanwei_main"])
 def test_both_published_heads_upgrade_without_losing_users(tmp_path, previous_head):
     engine = sa.create_engine(f"sqlite:///{tmp_path / 'merge.db'}")
     script = ScriptDirectory(str(bootstrap._MIGRATIONS_DIR))
@@ -46,15 +48,25 @@ def test_both_published_heads_upgrade_without_losing_users(tmp_path, previous_he
             # columns introduced later (for example users.disabled in 0039).
             conn.execute(sa.text("INSERT INTO users (id, email, system_role, created_at, needs_setup, token_version) VALUES ('merge-user', 'merge@example.test', 'user', CURRENT_TIMESTAMP, 0, 0)"))
 
+        async def startup():
+            async_engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'merge.db'}")
+            try:
+                await bootstrap.bootstrap_schema(async_engine, backend="sqlite")
+            finally:
+                await async_engine.dispose()
+
+        asyncio.run(startup())
         for _ in range(2):
             upgrade("head")
             with engine.connect() as conn:
-                assert conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one() == "0047_merge_fanwei_main"
+                assert conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one() == "0050_merge_published_heads"
                 assert conn.execute(sa.text("SELECT email FROM users WHERE id='merge-user'")).scalar_one() == "merge@example.test"
                 inspector = sa.inspect(conn)
                 assert "oauth_issuer" in {column["name"] for column in inspector.get_columns("users")}
                 assert "notification_deliveries" in inspector.get_table_names()
                 assert "skill_mutation_operations" in inspector.get_table_names()
+                assert "mcp_oauth_tokens" in inspector.get_table_names()
+                assert "extension_execution_leases" in inspector.get_table_names()
     finally:
         engine.dispose()
 

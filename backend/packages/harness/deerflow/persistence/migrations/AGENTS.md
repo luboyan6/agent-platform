@@ -35,7 +35,7 @@ The empty-DB path keeps using `create_all` because `Base.metadata` is the only a
 `0041_im_notice_preferences` → `0042_channel_leases` →
 `0043_runtime_im_notices` → `0044_channel_runtime_configs` →
 `0045_completed_run_evidence` → `0046_skill_mutations` → `0047_mcp_oauth_tokens` → `0048_extension_execution_leases` →
-`0049_merge_fanwei_main` (current head). The DDL-free 0049 merge joins the
+`0049_merge_fanwei_main` → `0050_merge_published_heads` (current head). The DDL-free 0049 merge joins the
 published `0034_merge_fanwei_main` branch without reparenting either history.
 The historical 0034 merge retains `0027_fanwei_oidc_issuer` and
 `0033_batch_result_artifact` as parents. The preference
@@ -210,3 +210,4 @@ Tests: `test_migration_0041_im_notice_preferences.py`.
 - `0047_mcp_oauth_tokens` creates the table-guarded `mcp_oauth_tokens` (PK `scope`, `owner_user_id` (`''` for deployment), `server_key`; encrypted token columns, chain and request fingerprints, `version`, refresh lease) with no backfill.
 - `0048_extension_execution_leases` adds generic extension execution fences after the shipped OAuth revision; test upgrade/downgrade in `test_extension_execution_fence.py`.
 - `0049_merge_fanwei_main` joins `0034_merge_fanwei_main` and `0048_extension_execution_leases` without schema DDL. Keep both published parents unchanged; tests cover upgrades from each branch, preservation of existing users, and repeated upgrades. The single-head pin lives in `tests/test_migration_0049_merge_fanwei_main.py`.
+- `0047_merge_fanwei_main` is a published DDL-free merge of `0034_merge_fanwei_main` and `0046_skill_mutations`; never rename or remove it. `0050_merge_published_heads` merges that history with `0049_merge_fanwei_main` without reparenting either published revision. Databases at either merge upgrade through the missing OAuth/extension migrations normally. Regression coverage in `test_migration_0027_fanwei_oidc_issuer.py` checks both stamps, preserved users and repeated upgrades.

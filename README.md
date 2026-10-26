@@ -618,6 +618,10 @@ some existing databases (#5516). The repair preserves run history and existing
 change positions; downgrading the repair to its predecessor also retains the
 schema and positions required by that version.
 
+Databases at the published Fanwei merge revisions `0047_merge_fanwei_main`
+and `0049_merge_fanwei_main` upgrade automatically on Gateway startup, preserving
+existing data while applying the missing OAuth and extension lease migrations.
+
 For lightweight single-process event persistence, `run_events.backend: jsonl`
 keeps Unicode message content intact, including line and paragraph separators.
 Existing valid JSONL records remain readable without rewriting the files.
@@ -2161,13 +2165,13 @@ Each message can still select up to 1000 documents. When more than 100 documents
 
 Advanced deployments can enable pluggable authorization with `authorization.enabled` in `config.yaml`. A configured `AuthorizationProvider` filters denied tools before they reach the model or deferred-tool catalog, then the same provider is checked again before every business-tool execution through the existing guardrail middleware. Gateway `threads:*` and `runs:*` route permissions are derived from the same provider, while existing owner checks and admin-only management gates remain in force. Every HTTP route that starts or enables a future Agent run requires `runs:create`: this includes the stateless `POST /api/runs/stream` and `POST /api/runs/wait` endpoints plus scheduled-task create, update, resume, and manual-trigger mutations. Scheduled-task mutations retain their existing `threads:write` requirement, and the stateless routes separately enforce ownership when the optional thread ID is supplied in the request body. A generated `tool_search` may bypass the second tool check only when it fronts the current build's already-filtered deferred catalog. Model access follows the same provider: the Gateway `models` list is filtered per principal, `model:use` is enforced on model detail requests and again when the runtime resolves the agent's model, and a denied default model falls back to the first remaining candidate that also passes `model:use`. The built-in RBAC provider supports per-role `tools`, `routes`, `models`, `skills`, and `sandbox` allow/deny policies and validates that `default_role` names a configured role; authorization is disabled by default. Custom roles declared in the provider's `roles` mapping become reachable by assigning them to a user through the admin API (`GET /api/v1/admin/users`, `PATCH /api/v1/admin/users/{id}`; admin-only, last-admin demotion protected) — a declared role nobody holds grants nothing. See `config.example.yaml` and the [authorization RFC](docs/plans/2026-07-10-pluggable-authorization-rfc.md).
 
-The current finance/aftersales MCP test uses native RBAC exact tool allowlists;
-the October 3 `rag_access` runtime guards are temporarily commented out. Merge
+Finance/aftersales MCP access uses native RBAC exact tool allowlists;
+the superseded October 3 RAG-specific authorization implementation has been removed. Merge
 `config.native-rbac-mcp.example.yaml` into the existing enabled role policy and
 use the environment-backed `weknora-ai` / `weknora-mcp` connection examples.
 See [native MCP role testing](backend/docs/NATIVE_RBAC_MCP_TEST.md) for credential
-setup, account assignment, cross-role rejection checks and the suspended
-guard's limitations.
+setup, account assignment, cross-role rejection checks and native authorization
+limits.
 
 Follow-up suggestions also check `model:use` before calling the selected model, including the default model when no name is supplied. A denied model returns HTTP 403 without an LLM call; authorization-provider failures follow the configured `fail_closed` policy.
 

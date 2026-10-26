@@ -1184,11 +1184,7 @@ def _wrap_discovered_server_tools(
             continue
         prefix = f"{server_name}_"
         original_name = tool.name[len(prefix) :] if tool_name_prefix and tool.name.startswith(prefix) else tool.name
-        tag_mcp_tool(tool, server_name=server_name, transport=transport, original_tool_name=original_name)
-        # October 3 RAG schema adaptation suspended for native RBAC tests.
-        # if server_cfg is not None and server_cfg.rag_access is not None:
-        #     from deerflow.mcp.rag_access import stateless_rag_tool
-        #     tool = stateless_rag_tool(tool, original_name)
+        tag_mcp_tool(tool, server_name=server_name, transport=transport)
         routing = resolve_effective_mcp_routing(server_cfg, original_name)
         if routing.get("mode") != "off":
             tag_mcp_routing(tool, routing)

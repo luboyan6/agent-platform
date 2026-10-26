@@ -3,7 +3,7 @@
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 import yaml
@@ -16,6 +16,7 @@ from langgraph.prebuilt import ToolNode
 from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 
+from app.gateway.routers.mcp import McpServerConfigResponse
 from deerflow.agents.middlewares.tool_error_handling_middleware import build_lead_runtime_middlewares, build_subagent_runtime_middlewares
 from deerflow.authz.adapter import GuardrailAuthorizationAdapter
 from deerflow.authz.provider import AuthzRequest, Principal
@@ -23,10 +24,9 @@ from deerflow.authz.rbac import RbacAuthorizationProvider
 from deerflow.authz.tool_filter import apply_tool_authorization
 from deerflow.config.app_config import AppConfig
 from deerflow.config.authorization_config import AuthorizationConfig, AuthorizationProviderConfig
-from deerflow.config.extensions_config import ExtensionsConfig, McpServerConfig, RagMcpAccessConfig
+from deerflow.config.extensions_config import ExtensionsConfig, McpServerConfig
 from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.guardrails.middleware import GuardrailMiddleware
-from deerflow.mcp import rag_access
 from deerflow.mcp.interceptors import build_mcp_tool_interceptors
 from deerflow.mcp.tools import get_mcp_tools
 from deerflow.tools.builtins.tool_search import assemble_deferred_tools
@@ -61,7 +61,6 @@ def catalog():
             StructuredTool.from_function(lambda: "synthetic result", name=f"{alias}_search_knowledge", description="synthetic MCP tool"),
             server_name=alias,
             transport="http",
-            original_tool_name="search_knowledge",
         )
         for alias in ["weknora-ai", "weknora-mcp", "weknora-ai_extra"]
     ]
@@ -77,8 +76,7 @@ def catalog():
         ("unknown", []),
     ],
 )
-def test_native_role_catalog_and_deferred_search(config, catalog, monkeypatch, role, expected):
-    monkeypatch.setattr(rag_access, "project_rag_tools", MagicMock(side_effect=AssertionError("RAG projection is suspended")))
+def test_native_role_catalog_and_deferred_search(config, catalog, role, expected):
     filtered, provider = apply_tool_authorization(catalog, context={"user_id": "synthetic-user", "user_role": role}, app_config=config)
     assert provider is not None
     assert [tool.name for tool in filtered] == expected
@@ -95,14 +93,14 @@ def test_shared_catalog_is_not_mutated_between_roles(config, catalog):
     assert [tool.metadata for tool in catalog] == metadata
 
 
-def test_mcp_interceptor_assembly_never_builds_rag_guard(monkeypatch):
-    guard = MagicMock(side_effect=AssertionError("RAG guard is suspended"))
-    monkeypatch.setattr(rag_access, "build_rag_access_interceptor", guard)
-    # Patch the already-imported binding as well on the pre-change implementation.
-    monkeypatch.setattr("deerflow.mcp.interceptors.build_rag_access_interceptor", guard, raising=False)
+def test_plain_mcp_connection_needs_no_credential_interceptors():
     config = ExtensionsConfig(mcp_servers={"plain": McpServerConfig(type="http", url="http://localhost/mcp")})
     assert build_mcp_tool_interceptors(config) == []
-    guard.assert_not_called()
+
+
+@pytest.mark.parametrize("model", [McpServerConfig, McpServerConfigResponse])
+def test_mcp_config_schema_no_longer_advertises_retired_rag_policy(model):
+    assert "rag_access" not in model.model_json_schema()["properties"]
 
 
 @pytest.mark.asyncio
@@ -154,10 +152,7 @@ async def test_default_and_unknown_role_cannot_execute_mcp(config, catalog, role
 @pytest.mark.parametrize("role,allowed_alias,denied_alias", [("finance", "weknora-ai", "weknora-mcp"), ("aftersales", "weknora-mcp", "weknora-ai")])
 async def test_discovered_adapter_in_graph_uses_native_guard_before_mcp_session(config, monkeypatch, role, allowed_alias, denied_alias):
     """Exercise real discovery, adapters, ToolNode and native execution gating."""
-    # Retained legacy ACL fields must not re-enable the suspended runtime path.
-    extensions = ExtensionsConfig(
-        mcp_servers={alias: McpServerConfig(type="http", url=f"http://localhost/{alias}", headers={"Authorization": "Bearer synthetic"}, rag_access=RagMcpAccessConfig(roles=["user"])) for alias in [allowed_alias, denied_alias]}
-    )
+    extensions = ExtensionsConfig(mcp_servers={alias: McpServerConfig(type="http", url=f"http://localhost/{alias}", headers={"Authorization": "Bearer synthetic"}) for alias in [allowed_alias, denied_alias]})
     opened, sent = [], []
 
     class Client:
@@ -236,9 +231,10 @@ def test_reference_connections_use_environment_headers_without_rag_access(monkey
     for name in ["WEKNORA_FINANCE_AUTHORIZATION", "WEKNORA_AFTERSALES_AUTHORIZATION"]:
         monkeypatch.setenv(name, "Bearer synthetic-credential")
     extensions = ExtensionsConfig.from_file(str(root / "extensions_config.example.json"))
+    assert {"rag_common", "rag_restricted"}.isdisjoint(extensions.mcp_servers)
     for alias in ["weknora-ai", "weknora-mcp"]:
         server = extensions.mcp_servers[alias]
         assert server.enabled is False
         assert server.type == "http" and server.tool_name_prefix is True
-        assert server.rag_access is None
+        assert "rag_access" not in server.model_dump()
         assert server.headers["Authorization"] == "Bearer synthetic-credential"

@@ -32,8 +32,7 @@ def apply_tool_authorization(
     Layer 2 share a single instance), builds a Principal from *context*, and
     filters *tools* in place by the provider's policy.
 
-    RAG-specific projection is suspended for the native RBAC test. When
-    ``authorization.enabled`` is false, returns the tools and ``None``.
+    When ``authorization.enabled`` is false, returns the tools and ``None``.
 
     Args:
         tools: Candidate tools (already skill-filtered etc.).
@@ -48,9 +47,6 @@ def apply_tool_authorization(
         provider instance (for passing to Layer 2 middleware wiring, or
         ``None`` when authorization is disabled).
     """
-    # October 3 RAG projection suspended: use native RBAC for MCP role tests.
-    # from deerflow.mcp.rag_access import project_rag_tools
-    # tools = project_rag_tools(tools, context)
     authz_config = app_config.authorization
     # Guard against Mock objects in tests: MagicMock attribute access returns
     # a truthy child mock for ``enabled``, which would trigger provider

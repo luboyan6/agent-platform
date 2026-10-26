@@ -1514,10 +1514,7 @@ class TestAgentConstruction:
 
         monkeypatch.setattr(tool_filter, "apply_tool_authorization", filter_off_loop)
         monkeypatch.setattr(sys.modules["deerflow.skills.storage"], "get_or_new_user_skill_storage", lambda user_id, *, app_config=None: SimpleNamespace(load_skills=lambda *, enabled_only: []))
-        tools = [
-            tag_mcp_tool(StructuredTool.from_function(lambda: "fixture", name=f"{alias}_search_knowledge", description="fixture"), server_name=alias, transport="http", original_tool_name="search_knowledge")
-            for alias in ("weknora-ai", "weknora-mcp")
-        ]
+        tools = [tag_mcp_tool(StructuredTool.from_function(lambda: "fixture", name=f"{alias}_search_knowledge", description="fixture"), server_name=alias, transport="http") for alias in ("weknora-ai", "weknora-mcp")]
         app_config = _default_app_config()
         app_config.tool_search.enabled = True
         app_config.authorization = AuthorizationConfig(

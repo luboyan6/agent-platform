@@ -181,7 +181,7 @@ def test_registered_after_oauth_in_shared_assembly():
     assert interceptors[1].__name__ == "user_scoped_auth_interceptor"
 
 
-def test_shared_assembly_has_no_rag_guard_without_user_auth():
+def test_shared_assembly_skips_when_no_user_auth():
     config = ExtensionsConfig(
         mcp_servers={"plain": McpServerConfig(enabled=True, type="http", url="https://x.example.com")},
         skills={},

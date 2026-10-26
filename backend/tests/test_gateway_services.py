@@ -4853,6 +4853,20 @@ def _assemble_authz_run_config(request_config: dict, request, *, body_context: d
 class TestInjectAuthenticatedUserContextAuthz:
     """Verify is_internal and authz_attributes anti-forgery in inject_authenticated_user_context."""
 
+    @pytest.mark.parametrize("source", ["session", "pat", "internal", "auth_disabled", None])
+    def test_restamps_auth_source_and_actor_from_both_client_carriers(self, source):
+        from app.gateway.services import inject_authenticated_user_context
+
+        request = _make_request_with_auth_source(source, user_id="real-actor")
+        forged = {"user_id": "forged-admin", "user_role": "admin", "authz_attributes": {"auth_source": "session", "forged": True}, "is_internal": False}
+        config = {"context": dict(forged), "configurable": dict(forged)}
+        inject_authenticated_user_context(config, request)
+        assert config["context"]["authz_attributes"] == {"auth_source": source}
+        assert config["context"]["user_role"] == "user"
+        assert "authz_attributes" not in config["configurable"]
+        if source != "internal":
+            assert config["context"]["user_id"] == "real-actor"
+
     def test_clears_forged_is_internal_from_context_section(self):
         """Client forges is_internal=True via body.config['context'] → must be cleared."""
         request = _make_request_with_auth_source("session")

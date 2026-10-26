@@ -12,9 +12,6 @@ from deerflow.mcp.oauth import build_oauth_tool_interceptor
 from deerflow.mcp.user_scoped_auth import build_user_scoped_auth_interceptor
 from deerflow.reflection import resolve_variable
 
-# RAG-specific admission suspended for native RBAC MCP role tests.
-# from deerflow.mcp.rag_access import build_rag_access_interceptor
-
 logger = logging.getLogger(__name__)
 
 
@@ -74,10 +71,6 @@ def build_mcp_tool_interceptors(
                 f"Failed to load MCP interceptor {interceptor_path}",
                 exc_info=True,
             )
-    # October 3 RAG admission suspended: use native RBAC for MCP role tests.
-    # rag_guard = build_rag_access_interceptor(extensions_config)
-    # if rag_guard is not None:
-    #     interceptors.append(rag_guard)
     return interceptors
 
 

@@ -921,6 +921,10 @@ async def get_mcp_tools() -> list[BaseTool]:
                 tag_mcp_tool(tool, server_name=source_name, transport=transport)
                 prefix = f"{source_name}_"
                 original_name = tool.name[len(prefix) :] if tool_name_prefix and tool.name.startswith(prefix) else tool.name
+                if server_cfg and original_name in server_cfg.tools:
+                    tool_override = server_cfg.tools[original_name]
+                    if tool_override.description:
+                        tool.description = tool_override.description
                 routing = resolve_effective_mcp_routing(server_cfg, original_name)
                 if routing.get("mode") != "off":
                     tag_mcp_routing(tool, routing)

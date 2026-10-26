@@ -71,6 +71,7 @@ class McpRoutingConfig(BaseModel):
 class McpToolOverride(BaseModel):
     """Per-tool MCP configuration overrides."""
 
+    description: str | None = Field(default=None, description="Optional override for tool description")
     routing: McpRoutingConfig = Field(default_factory=McpRoutingConfig)
     model_config = ConfigDict(extra="allow")
 

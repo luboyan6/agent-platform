@@ -1,0 +1,89 @@
+# Authorization fragment: merge these roles into an ENABLED native RBAC provider.
+# Keep existing admin/user/guest/internal policies. Native RBAC has no inheritance
+# and no prefix glob matching: list exact names returned by MCP discovery.
+# The names below match the local WeKnora source catalog, not a verified live
+# endpoint. Undeclared/new tools stay denied for these business roles.
+authorization:
+  provider:
+    config:
+      roles:
+        finance:
+          tools:
+            allow:
+              - web_search
+              - web_fetch
+              - image_search
+              - ls
+              - read_file
+              - glob
+              - grep
+              - write_file
+              - str_replace
+              - bash
+              - present_files
+              - ask_clarification
+              - review_skill_package
+              - task
+              - view_image
+              - list_uploaded_files
+              - list_background_tasks
+              - cancel_background_task
+              - batch_task
+              - batch_status
+              - cancel_batch
+              - read_batch_result
+              - weknora-ai_list_knowledge_bases
+              - weknora-ai_search_knowledge
+              - weknora-ai_grep_chunks
+              - weknora-ai_list_documents
+              - weknora-ai_read_document
+              - weknora-ai_ask
+              - weknora-ai_wiki_search
+              - weknora-ai_wiki_read_page
+              - weknora-ai_wiki_index
+          routes: {allow: "*"}
+          models: {allow: "*"}
+          sandbox: {allow: "*"}
+          skills: {allow: "*"}
+          plugin_actions: {allow: "*"}
+          plugin_management: {allow: []}
+        aftersales:
+          tools:
+            allow:
+              - web_search
+              - web_fetch
+              - image_search
+              - ls
+              - read_file
+              - glob
+              - grep
+              - write_file
+              - str_replace
+              - bash
+              - present_files
+              - ask_clarification
+              - review_skill_package
+              - task
+              - view_image
+              - list_uploaded_files
+              - list_background_tasks
+              - cancel_background_task
+              - batch_task
+              - batch_status
+              - cancel_batch
+              - read_batch_result
+              - weknora-mcp_list_knowledge_bases
+              - weknora-mcp_search_knowledge
+              - weknora-mcp_grep_chunks
+              - weknora-mcp_list_documents
+              - weknora-mcp_read_document
+              - weknora-mcp_ask
+              - weknora-mcp_wiki_search
+              - weknora-mcp_wiki_read_page
+              - weknora-mcp_wiki_index
+          routes: {allow: "*"}
+          models: {allow: "*"}
+          sandbox: {allow: "*"}
+          skills: {allow: "*"}
+          plugin_actions: {allow: "*"}
+          plugin_management: {allow: []}

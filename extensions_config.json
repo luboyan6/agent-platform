@@ -2,6 +2,300 @@
   "middlewares": [],
   "mcpInterceptors": [],
   "mcpServers": {
+    "weknora-ai": {
+      "enabled": true,
+      "type": "http",
+      "url": "http://localhost:5173/mcp/c757cd89-a364-4dcf-b7b5-59803f01026e",
+      "headers": {
+        "Authorization": "$WEKNORA_FINANCE_AUTHORIZATION"
+      },
+      "tool_name_prefix": true,
+      "session_init_timeout": 30,
+      "description": "AI 知识点问答知识库，用于 AI 知识检索与问答。",
+      "routing": {
+        "mode": "prefer",
+        "priority": 95,
+        "keywords": [
+          "AI知识点问答",
+          "AI知识点",
+          "人工智能知识",
+          "财务知识库",
+          "财务问答"
+        ]
+      }
+    },
+    "weknora-mcp": {
+      "enabled": true,
+      "type": "http",
+      "url": "http://localhost:5173/mcp/7f9a1def-67a8-4808-ba84-5895c3e1dc23",
+      "headers": {
+        "Authorization": "$WEKNORA_AFTERSALES_AUTHORIZATION"
+      },
+      "tool_name_prefix": true,
+      "session_init_timeout": 30,
+      "description": "需求说明知识库，用于需求检索与售后问答。",
+      "routing": {
+        "mode": "prefer",
+        "priority": 95,
+        "keywords": [
+          "需求说明",
+          "需求文档",
+          "需求查询",
+          "售后知识库",
+          "售后问答"
+        ]
+      }
+    },
+    "cnc-management": {
+      "enabled": true,
+      "type": "http",
+      "url": "http://127.0.0.1:10006/api/v1/mcp/",
+      "headers": {
+        "Authorization": "$CNC_MANAGEMENT_AUTHORIZATION"
+      },
+      "tool_name_prefix": true,
+      "session_init_timeout": 30,
+      "description": "CNC机加工与报价管理服务：管理嘉立创(JLC)、Xometry等机加工平台的登录账号、凭据与受控登录会话有效性(session_status)；支持安全解密表单密码或执行服务端受控登录；检索与校验STEP/STP三维零件图纸元数据、尺寸、单位、文件校验状态(HEADER_VALID)与第三方平台上传授权(upload_authorized)。安全脱敏，不传输图纸二进制数据。",
+      "routing": {
+        "mode": "prefer",
+        "priority": 95,
+        "keywords": [
+          "CNC",
+          "CNC管理",
+          "CNC平台",
+          "机加工",
+          "机加工平台",
+          "加工",
+          "报价",
+          "核价",
+          "询价",
+          "CNC报价",
+          "机加工报价",
+          "嘉立创",
+          "JLC",
+          "嘉立创CNC",
+          "Xometry",
+          "立创",
+          "账号",
+          "账户",
+          "account",
+          "CNC账号",
+          "加工账号",
+          "报价账号",
+          "平台账号",
+          "登录账号",
+          "受控登录",
+          "登录会话",
+          "会话状态",
+          "session",
+          "session_status",
+          "凭据",
+          "凭证",
+          "密码",
+          "解密密码",
+          "图纸",
+          "零件图纸",
+          "3D图纸",
+          "三维图纸",
+          "三维模型",
+          "零件",
+          "part",
+          "drawing",
+          "CAD",
+          "STEP",
+          "STP",
+          "step文件",
+          "stp文件",
+          "图纸列表",
+          "图纸详情",
+          "零件列表",
+          "零件详情",
+          "校验状态",
+          "HEADER_VALID",
+          "validation_status",
+          "上传授权",
+          "授权上传",
+          "upload_authorized",
+          "第三方上传"
+        ]
+      },
+      "tools": {
+        "cnc_account_list": {
+          "description": "分页查询当前用户有权限访问的机加工平台账号列表（如嘉立创JLC、Xometry等），返回 id、username、加密凭据 password、platform_name、login_url、quote_url。注意：返回的 password 为密文信封，不可直接填入网页登录表单；如需启动平台登录请优先调用受控登录工具 cnc_account_login，仅在需手动填表且无受控登录时调用 cnc_account_decrypt_password 解密。",
+          "routing": {
+            "mode": "prefer",
+            "priority": 100,
+            "keywords": [
+              "CNC",
+              "CNC账号",
+              "CNC平台账号",
+              "机加工账号",
+              "加工账号",
+              "报价账号",
+              "平台账号",
+              "登录账号",
+              "账号列表",
+              "查询账号",
+              "获取账号",
+              "可用账号",
+              "查看所有账号",
+              "嘉立创",
+              "嘉立创账号",
+              "JLC",
+              "JLC账号",
+              "Xometry",
+              "Xometry账号",
+              "account_list",
+              "list_accounts",
+              "账号清单",
+              "有哪些账号",
+              "获取CNC账号",
+              "CNC报价",
+              "机加工报价"
+            ]
+          }
+        },
+        "cnc_account_detail": {
+          "description": "按账号 id 查询单个机加工平台账号（如嘉立创JLC、Xometry等）的详细信息，返回 id、username、加密凭据 password、platform_name、login_url、quote_url。注意：返回的 password 为密文；需要登录平台请调用 cnc_account_login；需要填表明文密码请调用 cnc_account_decrypt_password。",
+          "routing": {
+            "mode": "prefer",
+            "priority": 100,
+            "keywords": [
+              "账号详情",
+              "账号信息",
+              "查看账号",
+              "指定账号",
+              "查询单个账号",
+              "account_detail",
+              "平台账号详情",
+              "获取账号详情",
+              "账号ID查询"
+            ]
+          }
+        },
+        "cnc_account_login": {
+          "description": "机加工平台受控登录生命周期管理：按账号 id 启动(start)、查询状态(status)、验证身份(verify)或关闭(close)嘉立创(JLC)、Xometry等第三方平台的受控登录会话。服务端会自动安全解密已保存密码并与平台交互，无需调用方传入密码。action 默认为 start（启动或复用会话，返回 session_id 与初始状态）；随后以同一 id 和返回的 session_id 查询 status；若状态为 WAITING_HUMAN 说明需要用户在登录弹窗中完成滑块验证码或人机验证；仅当状态为 READY 时表示登录成功且身份核验通过；close 用于在任务完成或异常时释放受控会话。返回 LoginView。",
+          "routing": {
+            "mode": "prefer",
+            "priority": 100,
+            "keywords": [
+              "登录",
+              "受控登录",
+              "平台登录",
+              "账号登录",
+              "登录平台",
+              "登录嘉立创",
+              "登录Xometry",
+              "JLC登录",
+              "嘉立创登录",
+              "Xometry登录",
+              "启动登录",
+              "登录会话",
+              "查询登录状态",
+              "登录状态",
+              "验证登录",
+              "验证码",
+              "滑块验证",
+              "人机验证",
+              "WAITING_HUMAN",
+              "关闭登录",
+              "关闭会话",
+              "退出登录",
+              "close_session",
+              "account_login",
+              "cnc_login",
+              "session_id"
+            ]
+          }
+        },
+        "cnc_account_decrypt_password": {
+          "description": "按登录账号 username（精确匹配用户名/手机号/邮箱）解密并获取其明文密码，返回 id、username、password（明文）。仅供调用方必须手动将明文密码填入第三方平台登录表单（如通过浏览器自动化 CDP/Playwright 手动填写登录弹窗）且不使用 cnc_account_login 受控登录时使用。参数传 username（非数字 id）。明文密码属于高危敏感凭据，调用方严禁将其回显给用户、打印到日志或写入持久化文档。",
+          "routing": {
+            "mode": "prefer",
+            "priority": 100,
+            "keywords": [
+              "解密密码",
+              "密码解密",
+              "获取密码",
+              "明文密码",
+              "账号密码",
+              "查询密码",
+              "提取密码",
+              "填表密码",
+              "登录密码",
+              "decrypt_password",
+              "获取明文",
+              "密码明文",
+              "password"
+            ]
+          }
+        },
+        "cnc_part_list": {
+          "description": "分页查询允许当前用户访问的三维零件图纸记录列表，返回图纸 id、file_name、file_path、零件尺寸、单位与第三方平台上传授权状态(upload_authorized)等元数据。仅返回图纸文件元信息与本地路径，不读取或传输图纸二进制数据。支持按零件名称、校验状态、授权状态等条件筛选。在执行嘉立创或 Xometry 报价前，必须先通过此工具获取可用的零件图纸及其实际本地文件路径(file_path)。",
+          "routing": {
+            "mode": "prefer",
+            "priority": 100,
+            "keywords": [
+              "CNC",
+              "图纸",
+              "零件",
+              "图纸列表",
+              "零件列表",
+              "查询图纸",
+              "查询零件",
+              "零件清单",
+              "图纸清单",
+              "STEP",
+              "STP",
+              "step文件",
+              "stp文件",
+              "3D图纸",
+              "三维图纸",
+              "三维模型",
+              "CAD图纸",
+              "CAD零件",
+              "检索图纸",
+              "可用图纸",
+              "part_list",
+              "drawing_list",
+              "可加工零件",
+              "报价图纸",
+              "CNC报价",
+              "机加工报价",
+              "嘉立创",
+              "JLC",
+              "Xometry"
+            ]
+          }
+        },
+        "cnc_part_detail": {
+          "description": "按图纸 id 查询单个三维零件图纸的详细元数据与第三方平台上传授权状态(upload_authorized)。返回零件长宽高尺寸、单位、文件头校验状态(HEADER_VALID)等信息。重要说明：HEADER_VALID 仅表示 STEP/STP 文件头部格式有效，不代表已核实其实际可加工性；upload_authorized 为 true 时方可授权上传至嘉立创、Xometry 等第三方平台进行自动报价。",
+          "routing": {
+            "mode": "prefer",
+            "priority": 100,
+            "keywords": [
+              "图纸详情",
+              "零件详情",
+              "查看图纸",
+              "查看零件",
+              "图纸元数据",
+              "零件尺寸",
+              "图纸单位",
+              "零件授权",
+              "上传授权",
+              "upload_authorized",
+              "HEADER_VALID",
+              "校验状态",
+              "文件校验",
+              "part_detail",
+              "drawing_detail",
+              "查询零件详情",
+              "核查图纸"
+            ]
+          }
+        }
+      }
+    },
     "parallel-search": {
       "enabled": false,
       "type": "http",
@@ -125,6 +419,72 @@
           "巡查记录",
           "订单汇总",
           "订单统计"
+        ]
+      }
+    },
+    "chrome-devtools": {
+      "enabled": false,
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ],
+      "description": "Chrome DevTools MCP server"
+    },
+    "playwright": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/root/.npm/_npx/0b9ff77863cb6e9f/node_modules/@executeautomation/playwright-mcp-server/dist/index.js"
+      ],
+      "tool_name_prefix": false,
+      "description": "Playwright MCP server for headless browser automation",
+      "routing": {
+        "mode": "prefer",
+        "priority": 90,
+        "keywords": [
+          "playwright",
+          "浏览器自动化",
+          "自动化测试",
+          "打开网站",
+          "页面点击",
+          "网页截图",
+          "表单填写"
+        ]
+      }
+    },
+    "PostgreSQL": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/root/.npm/_npx/cd1ce99963b5e8b1/node_modules/@modelcontextprotocol/server-postgres/dist/index.js",
+        "postgresql://dxzl:Ragplatform369%40@192.168.1.202:15432/cnc_quote_pilot"
+      ],
+      "description": "PostgreSQL database access for CNC quote pilot"
+    },
+    "cdp-bridge": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "/workspace/cdp-bridge/.venv/bin/cdp-bridge",
+      "args": [],
+      "cwd": "/workspace/cdp-bridge",
+      "tool_name_prefix": false,
+      "description": "CDP Bridge MCP server for real browser automation through companion extension",
+      "routing": {
+        "mode": "prefer",
+        "priority": 95,
+        "keywords": [
+          "浏览器",
+          "网页",
+          "标签页",
+          "browser",
+          "tab",
+          "页面",
+          "CDP",
+          "DevTools"
         ]
       }
     }

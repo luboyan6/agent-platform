@@ -108,3 +108,26 @@ def test_unknown_routing_fields_are_rejected():
                 }
             }
         )
+
+
+def test_tool_description_override_is_preserved():
+    config = ExtensionsConfig.model_validate(
+        {
+            "mcpServers": {
+                "cnc": {
+                    "tools": {
+                        "custom_tool": {
+                            "description": "Overridden tool description",
+                            "routing": {
+                                "priority": 90,
+                            },
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    tool_override = config.mcp_servers["cnc"].tools["custom_tool"]
+    assert tool_override.description == "Overridden tool description"
+    assert tool_override.routing.priority == 90

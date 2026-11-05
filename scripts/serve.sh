@@ -31,41 +31,41 @@ set -e
 REPO_ROOT="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd -P)"
 cd "$REPO_ROOT"
 
-# ── Load .env ────────────────────────────────────────────────────────────────
-
-_load_dotenv() {
-    local env_file=$1
-    local line line_number=0 key value
-
-    while IFS= read -r line || [ -n "$line" ]; do
-        line_number=$((line_number + 1))
-        line="${line%$'\r'}"
-
-        case "$line" in
-            "" | \#*) continue ;;
-        esac
-
-        if [[ ! "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-            echo "Invalid dotenv entry at $env_file:$line_number; expected KEY=value" >&2
-            return 1
+_pick_python() {
+    local candidate
+    for candidate in python3 python py; do
+        # Probe through `env` as well: the frontend is launched as
+        # `env PORT="$DEER_FLOW_FRONTEND_PORT" "$DEERFLOW_PNPM_PYTHON" ...`
+        # (FRONTEND_CMD below), and on
+        # Windows/Git Bash the Microsoft Store python aliases under WindowsApps
+        # are skipped by Bash's own PATH lookup yet still resolved (and fail to
+        # exec) inside /usr/bin/env. A bare "$candidate" probe passes while the
+        # real launch dies with: env: 'python3': No such file or directory
+        if command -v "$candidate" >/dev/null 2>&1 \
+            && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info.major >= 3 else 1)' >/dev/null 2>&1 \
+            && env "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info.major >= 3 else 1)' >/dev/null 2>&1; then
+            printf '%s\n' "$candidate"
+            return 0
         fi
-
-        key="${line%%=*}"
-        value="${line#*=}"
-        case "$value" in
-            \"*\") value="${value:1:${#value}-2}" ;;
-            \'*\') value="${value:1:${#value}-2}" ;;
-        esac
-
-        # Passing one quoted NAME=value argument to the export builtin keeps
-        # dotenv content as data: command substitutions and shell expansions
-        # are never evaluated.
-        export "$key=$value"
-    done < "$env_file"
+    done
+    return 1
 }
 
+# ── Load .env ────────────────────────────────────────────────────────────────
+
+# .env is data, not a script: sourcing it turned `$$` into this shell's PID, ran
+# backticks and `$(...)`, and ran the second word of an unquoted value with a
+# space as a command. dotenv_exports.py parses it like python-dotenv, keeping the
+# launcher's `$NAME` / `${NAME:-default}` / leading `~` expansion and its
+# precedence over inherited variables, and prints shell-quoted exports.
 if [ -f "$REPO_ROOT/.env" ]; then
-    _load_dotenv "$REPO_ROOT/.env"
+    if ! DOTENV_PYTHON="$(_pick_python)"; then
+        echo "✗ Python 3 is required to read .env." >&2
+        exit 1
+    fi
+    DOTENV_EXPORTS="$("$DOTENV_PYTHON" "$REPO_ROOT/scripts/dotenv_exports.py" "$REPO_ROOT/.env")" || exit 1
+    eval "$DOTENV_EXPORTS"
+    unset DOTENV_PYTHON DOTENV_EXPORTS
 fi
 
 # PORT configures the public nginx ingress. Keep the local Next.js listener
@@ -95,26 +95,6 @@ if [ "$DEER_FLOW_FRONTEND_PORT" -lt 1 ] || [ "$DEER_FLOW_FRONTEND_PORT" -gt 6553
     exit 1
 fi
 export DEER_FLOW_FRONTEND_PORT
-
-_pick_python() {
-    local candidate
-    for candidate in python3 python py; do
-        # Probe through `env` as well: the frontend is launched as
-        # `env PORT="$DEER_FLOW_FRONTEND_PORT" "$DEERFLOW_PNPM_PYTHON" ...`
-        # (FRONTEND_CMD below), and on
-        # Windows/Git Bash the Microsoft Store python aliases under WindowsApps
-        # are skipped by Bash's own PATH lookup yet still resolved (and fail to
-        # exec) inside /usr/bin/env. A bare "$candidate" probe passes while the
-        # real launch dies with: env: 'python3': No such file or directory
-        if command -v "$candidate" >/dev/null 2>&1 \
-            && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info.major >= 3 else 1)' >/dev/null 2>&1 \
-            && env "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info.major >= 3 else 1)' >/dev/null 2>&1; then
-            printf '%s\n' "$candidate"
-            return 0
-        fi
-    done
-    return 1
-}
 
 # ── Argument parsing ─────────────────────────────────────────────────────────
 

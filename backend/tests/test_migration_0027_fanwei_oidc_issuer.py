@@ -30,7 +30,9 @@ def test_0027_joins_the_upstream_migration_chain():
     assert all(len(revision.revision) <= 32 for revision in script.walk_revisions())
 
 
-@pytest.mark.parametrize("previous_head", [REVISION, "0033_batch_result_artifact", "0034_merge_fanwei_main", "0046_skill_mutations", "0047_merge_fanwei_main", "0049_merge_fanwei_main"])
+@pytest.mark.parametrize(
+    "previous_head", [REVISION, "0033_batch_result_artifact", "0034_merge_fanwei_main", "0046_skill_mutations", "0047_merge_fanwei_main", "0049_merge_fanwei_main", "0050_merge_published_heads", "0052_batch_continuation"]
+)
 def test_both_published_heads_upgrade_without_losing_users(tmp_path, previous_head):
     engine = sa.create_engine(f"sqlite:///{tmp_path / 'merge.db'}")
     script = ScriptDirectory(str(bootstrap._MIGRATIONS_DIR))
@@ -59,7 +61,7 @@ def test_both_published_heads_upgrade_without_losing_users(tmp_path, previous_he
         for _ in range(2):
             upgrade("head")
             with engine.connect() as conn:
-                assert conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one() == "0050_merge_published_heads"
+                assert conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one() == "0053_merge_develop_main"
                 assert conn.execute(sa.text("SELECT email FROM users WHERE id='merge-user'")).scalar_one() == "merge@example.test"
                 inspector = sa.inspect(conn)
                 assert "oauth_issuer" in {column["name"] for column in inspector.get_columns("users")}

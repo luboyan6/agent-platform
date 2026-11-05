@@ -76,7 +76,7 @@ def _coerce_source_confidence(fact: dict[str, Any]) -> float:
         return 0.5
     try:
         val = float(raw)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0.5
     return max(0.0, min(val, 1.0)) if math.isfinite(val) else 0.5
 
@@ -886,6 +886,18 @@ def _message_identity(msg: Any) -> tuple[str, ...] | None:
     return ("content", msg_type, hashlib.sha256(text.encode("utf-8")).hexdigest())
 
 
+# DeerMem is portable; the host test pins this map to its UI allowlist.
+_MEMORY_UI_LANGUAGES = {"en-US": "English", "zh-CN": "Simplified Chinese"}
+
+
+def _memory_language_preference(messages: list[Any]) -> str:
+    for message in reversed(messages):
+        locale = (getattr(message, "additional_kwargs", {}) or {}).get("deerflow_ui_locale")
+        if isinstance(locale, str) and locale in _MEMORY_UI_LANGUAGES:
+            return f"Preferred memory language: {_MEMORY_UI_LANGUAGES[locale]} ({locale})"
+    return ""
+
+
 class MemoryUpdater:
     """Updates memory using LLM based on conversation context."""
 
@@ -1453,6 +1465,13 @@ class MemoryUpdater:
             "consolidation_section": consolidation_section,
         }
         prompt = load_prompt_messages("memory_update", variables, agent_name=agent_name, prompts_dir=self._prompts_dir)
+        language_preference = _memory_language_preference(messages)
+        if language_preference:
+            # Per-run preference is data, not part of the cached system text.
+            for index, message in enumerate(prompt):
+                if message.type == "human":
+                    prompt[index] = message.model_copy(update={"content": f"{language_preference}\n\n{message.content}"})
+                    break
         if config.prompt_prepend or config.prompt_append:
             # Extend trusted instructions only, after formatting the original
             # template. Conversation/memory data stays in its human message.
@@ -2429,7 +2448,7 @@ class MemoryUpdater:
                         existing_confidence = float(merge_target.get("confidence"))
                         if not math.isfinite(existing_confidence):
                             raise ValueError
-                    except (TypeError, ValueError):
+                    except (TypeError, ValueError, OverflowError):
                         existing_confidence = 0.0
                     if confidence > existing_confidence:
                         merge_target["confidence"] = confidence

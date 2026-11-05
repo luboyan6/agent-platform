@@ -15,7 +15,7 @@ The LangGraph backend provides sandbox execution, persistent memory, subagent de
 - `make dev`, Docker dev, and production all run the agent runtime in Gateway via `RunManager` + `run_agent()` + `StreamBridge` (`packages/harness/deerflow/runtime/`). Nginx exposes that runtime at `/api/langgraph/*` and rewrites it to Gateway's native `/api/*` routers.
 - Gateway streams `write_file` and `str_replace` argument deltas in bounded batches for multi-mode `messages-tuple` consumers; single-mode message consumers retain the original per-chunk contract. Non-message frames flush pending batches, and `values` remains an optional complete-state snapshot rather than a prerequisite for batching.
 - `stream_subgraphs` preserves subgraph SSE namespaces (`values|<ns>`, LangGraph Platform style); bare `values` would overwrite the SDK thread view (#4399). Delegated subagents inherit the parent's checkpoint namespace. Root-only consumers (file-tool chunk batcher, subagent event persistence, LLM error-fallback detection) ignore namespaced frames. The web frontend uses root `task_*` events without subgraph streaming.
-- Background subagent identity is deliberately split: the provider `tool_call_id` remains the correlation key for `ToolMessage`, `task_*` SSE events, persisted lifecycle events, frontend cards, and the public `ExtensionData.scope_id` contract (stored as `SubagentResult.external_task_id`), while `SubagentExecutor.execute_async()` generates a full server-side `execution_id` for `SubagentResult.task_id`, the process-wide registry, polling, cancellation, timeout handling, and cleanup. Provider IDs are not globally unique across parent runs, so they must never become registry ownership keys; scheduler closures retain their own `SubagentResult` rather than resolving ownership again through the mutable registry. Terminal subagent token usage travels in the current run's `ToolMessage.additional_kwargs` and is attributed from message state, never through a process-global provider-ID cache.
+- Subagent IDs: provider `tool_call_id` correlates `ToolMessage`, `task_*` SSE/persisted events, frontend cards and `ExtensionData.scope_id` (`SubagentResult.external_task_id`). Unique server `execution_id` owns `SubagentResult.task_id`, registry, polling, cancellation, timeout and cleanup. Provider IDs can collide across parent runs: scheduler closures retain their own result, never recover ownership through the mutable registry. Attribute terminal usage from the current run's `ToolMessage.additional_kwargs` and message state, never a global provider-ID cache.
 - Scheduled runs use Gateway's normal run path. `launch_scheduled_thread_run` reads `get_app_config()` at dispatch: `scheduler.recursion_limit` defaults to 1000 (web UI), capped by `max_recursion_limit`; YAML changes apply next run without restart. IM enqueue checks recipients before locking preferences in the outcome transaction.
 - Run-history `status` filters are occurrence states, not task states. `ScheduledTaskRunStatus` in `persistence/scheduled_tasks/model.py` is the shared API/repository vocabulary and must match the active and terminal occurrence-status sets. Keep owner lookup before reading history, and apply SQL task/status predicates before pagination; omitted status preserves the existing response.
 - The background scheduler is single-instance by default. `scheduler.multi_instance=true` opts into lease-aware recovery across Gateway instances and requires shared Postgres, `run_ownership.heartbeat_enabled=true`, and `run_events.backend=db`; otherwise startup rejects the configuration. Live scheduled runs are preserved when a peer starts; expired launch claims return to the durable queue, expired run leases are atomically taken over, stale launch writes are fenced by lease ownership, and the Postgres advisory-locked budget makes `max_concurrent_runs` a shared global cap for `launching`/`running` rows.
@@ -28,12 +28,9 @@ The LangGraph backend provides sandbox execution, persistent memory, subagent de
 - Gateway MCP/skill updates write `extensions_config.json` at runtime. Production Compose mounts it read-write (`config.yaml` stays `:ro`); Helm seeds a writable home-volume copy. Hold both `extensions_config_write_lock` and the sidecar advisory `extensions_config_file_lock` during read-modify-write to prevent lost updates across workers. `atomic_write_extensions_config` uses temp-file replacement; only mount-point `EBUSY` permits a non-atomic in-place overwrite (crashes can truncate). Warn about this fallback once per target; propagate other errors. `get_extensions_config()` revalidates reads by file signature; see [config caching](packages/harness/deerflow/config/AGENTS.md). Tests: `tests/test_compose_extensions_config_writable.py`, `tests/test_extensions_config_atomic_write.py`, `tests/test_helm_extensions_config_writable.py`.
 - MCP cache reset scope and discovery fencing: [MCP guide](packages/harness/deerflow/mcp/AGENTS.md).
 
-**Project structure:** The [root repository map](../AGENTS.md#repository-map)
-indexes the stack. Backend code lives in `app/` (Gateway and channels),
-`packages/harness/deerflow/` (agent runtime), and `packages/extension-api/`
-(public extension contracts). Tests, detailed docs, and standalone benchmarks
-live in `tests/`, `docs/`, and `scripts/benchmark/` respectively. Module-local
-`AGENTS.md` files describe their implementation boundaries.
+**Layout:** [Repository map](../AGENTS.md#repository-map). Tests: `tests/`;
+docs: `docs/`; benchmarks: `scripts/benchmark/`. Read module-local `AGENTS.md`
+for implementation boundaries.
 
 ## Important Development Guidelines
 
@@ -87,6 +84,13 @@ Read the nearest scoped `AGENTS.md` for subsystem ownership.
 
 Read-only knowledge: [contract](docs/KNOWLEDGE.md) covers independent retrieval
 tools, scope intersection and extension-owned providers.
+HTTPX clients for RAGFlow, LightRAG, You.com, GroundRoute, Webz, Crawl4AI and
+Browserless use `asyncio.to_thread` for synchronous TLS setup; requests and
+cleanup stay on-loop, and the construction is owned as a task so cancelling
+during setup still closes the client it builds.
+The list is non-exhaustive: jsonify, SearXNG, Jina and InfoQuest
+still construct their clients on the loop and should follow the same rule when
+touched.
 
 ### Harness / App Split
 
@@ -127,10 +131,21 @@ float filters accept integer or real JSON numbers through `json_value_matches`.
 
 Gate server-owned run context on both client feeds (`body.context` and
 `body.config`): `merge_run_context_overrides` admits it only for `internal=True`,
-while `strip_internal_context_keys` scrubs both destinations. Treat
+while `strip_internal_context_keys` scrubs both destinations. A validated
+`context.locale` (`en-US` / `zh-CN`) is a runtime-only language preference for
+replies and memory writes; it never persists into checkpoint `configurable`,
+and an explicit invalid/null top-level value clears a legacy preference. Treat
 `disable_clarification` like `non_interactive`. Before run/state writes,
 `_normalize_input_messages` rejects canonical external system/developer roles;
 only `AUTH_SOURCE_INTERNAL` run input may retain them.
+`_normalize_external_todos` rejects invalid caller todos with HTTP 400: entries
+must be objects with string content and a known status (default `pending`). Todo
+and token-usage readers normalize malformed stored/direct-integration values so
+model calls remain usable.
+
+`contracts/ui_locales.v1.json` pins the UI/Gateway locale allowlists in tests;
+DeerMem's portable map stays separate. Scheduled/MCP notification runs omit
+locale; persisted owner locale is used for scheduled IM notices only.
 
 `start_run` assigns IDs to ID-less messages before recording input or invoking
 the graph; keyed retries keep those IDs stable, while the pre-stamp input

@@ -370,7 +370,7 @@ export const enUS: Translations = {
   welcome: {
     greeting: "Hello, again!",
     description:
-      "Welcome to XIAOE, an open source super agent. With built-in and custom skills, XIAOE helps you search on the web, analyze data, and generate artifacts like slides, web pages and do almost anything.",
+      "Welcome to XIAOE. XIAOE can help you retrieve knowledge base documents, search the web, and analyze data. More features coming soon~",
 
     createYourOwnSkill: "Create Your Own Skill",
     createYourOwnSkillDescription:

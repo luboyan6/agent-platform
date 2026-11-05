@@ -1,13 +1,27 @@
 "use client";
 
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Lock,
+  Mail,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTheme } from "next-themes";
 import { useEffect, useContext, useState } from "react";
 
+import { AuthBackground } from "@/components/auth/auth-background";
+import { AuthBrand } from "@/components/auth/auth-brand";
 import { RememberSessionOption } from "@/components/auth/remember-session-option";
 import { Button } from "@/components/ui/button";
-import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { Input } from "@/components/ui/input";
 import { AuthDisabledContext, useAuth } from "@/core/auth/AuthProvider";
 import { isValidEmail } from "@/core/auth/email";
@@ -28,11 +42,11 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAuthenticated } = useAuth();
-  const { theme, resolvedTheme } = useTheme();
   const { t } = useI18n();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLogin, setIsLogin] = useState(true);
   const [ssoProviders, setSsoProviders] = useState<
@@ -232,8 +246,7 @@ export default function LoginPage() {
     }
   };
 
-  // A signed-in session is already on its way to `redirectPath` (see the
-  // effect above), so it never sees the sign-in form.
+  // A signed-in session is already on its way to the requested page.
   if (isAuthenticated) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
@@ -242,167 +255,338 @@ export default function LoginPage() {
     );
   }
 
-  const actualTheme = theme === "system" ? resolvedTheme : theme;
-
   return (
-    <div className="bg-background relative flex min-h-screen items-center justify-center overflow-x-hidden overflow-y-auto">
-      <FlickeringGrid
-        className="absolute inset-0 z-0"
-        squareSize={4}
-        gridGap={4}
-        color={actualTheme === "dark" ? "white" : "black"}
-        maxOpacity={0.3}
-        flickerChance={0.25}
-      />
-      <div className="border-border/20 bg-background/5 w-full max-w-md space-y-6 rounded-3xl border p-8 backdrop-blur-sm">
-        <div className="text-center">
-          <h1 className="text-foreground font-serif text-3xl">
-            {t.pages.appName}
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            {isLogin ? t.login.signInTitle : t.login.createAccountTitle}
-          </p>
-        </div>
+    <div className="relative flex min-h-screen items-center justify-center overflow-x-hidden overflow-y-auto px-4 py-12">
+      <AuthBackground />
 
-        {showSetupStatusUnavailable && (
+      <div className="relative w-full max-w-md">
+        {/* Luminous Glow Halo behind Card */}
+        <div
+          aria-hidden="true"
+          className="absolute -inset-1.5 rounded-[2.5rem] bg-gradient-to-r from-violet-600/20 via-indigo-500/15 to-cyan-500/20 opacity-75 blur-2xl dark:opacity-45"
+        />
+
+        {/* Elevated Glassmorphic Card */}
+        <div className="relative space-y-6 rounded-[2rem] border border-white/60 bg-white/80 p-7 shadow-2xl shadow-indigo-500/10 backdrop-blur-2xl transition-all sm:p-9 dark:border-white/10 dark:bg-zinc-950/75 dark:shadow-purple-950/30">
+          {/* Subtle top ambient light line */}
           <div
-            role="status"
-            aria-live="polite"
-            className="border-l-2 border-amber-500 ps-3 text-sm"
-          >
-            <p className="font-medium">{t.login.serviceUnavailableTitle}</p>
-            <p className="text-muted-foreground mt-1">
-              {t.login.serviceUnavailableDescription}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              disabled={setupStatusPhase === "checking"}
-              onClick={() => {
-                setSetupStatusPhase("checking");
-                setSetupStatusAttempt((attempt) => attempt + 1);
-              }}
-            >
-              {setupStatusPhase === "checking"
-                ? t.login.pleaseWait
-                : t.login.retry}
-            </Button>
-          </div>
-        )}
-
-        {systemNeedsAdminSetup && (
-          <div className="border-l-2 border-blue-500 ps-3 text-sm">
-            <p className="font-medium">{t.login.adminSetupRequiredTitle}</p>
-            <p className="text-muted-foreground mt-1">
-              {t.login.adminSetupRequiredDescription}
-            </p>
-            <Link
-              href="/setup"
-              className="mt-2 inline-block font-medium text-blue-500 hover:underline"
-            >
-              {t.login.createAdminAccount}
-            </Link>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} noValidate className="space-y-2">
-          <div className="flex flex-col space-y-1">
-            <label htmlFor="email" className="text-sm font-medium">
-              {t.login.email}
-            </label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t.login.emailPlaceholder}
-              required
-            />
-          </div>
-          <div className="flex flex-col space-y-1">
-            <label htmlFor="password" className="text-sm font-medium">
-              {t.login.password}
-            </label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t.login.passwordPlaceholder}
-              required
-              minLength={isLogin ? 6 : 8}
-            />
-          </div>
-
-          <RememberSessionOption
-            checked={rememberMe}
-            onCheckedChange={setRememberMe}
+            aria-hidden="true"
+            className="absolute top-0 right-10 left-10 h-px bg-gradient-to-r from-transparent via-violet-500/40 to-transparent"
           />
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {/* Brand Header */}
+          <AuthBrand
+            appName={t.pages.appName}
+            subtitle={
+              isLogin ? t.login.signInTitle : t.login.createAccountTitle
+            }
+          />
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading
-              ? t.login.pleaseWait
-              : isLogin
-                ? t.login.signIn
-                : t.login.createAccount}
-          </Button>
-        </form>
+          {/* Segmented Auth Mode Switcher */}
+          {regularSignupAllowed && (
+            <div
+              role="tablist"
+              aria-label="Auth Mode"
+              className="grid grid-cols-2 rounded-2xl border border-slate-200/70 bg-slate-100/80 p-1 dark:border-zinc-800/80 dark:bg-zinc-900/80"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={isLogin}
+                onClick={() => {
+                  setIsLogin(true);
+                  setError("");
+                  setShowSsoHint(false);
+                }}
+                className={`relative cursor-pointer rounded-xl py-2 text-sm font-medium transition-all duration-200 ${
+                  isLogin
+                    ? "text-foreground bg-white font-semibold shadow-xs dark:bg-zinc-800"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.login.signIn}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!isLogin}
+                onClick={() => {
+                  setIsLogin(false);
+                  setError("");
+                  setShowSsoHint(false);
+                }}
+                className={`relative cursor-pointer rounded-xl py-2 text-sm font-medium transition-all duration-200 ${
+                  !isLogin
+                    ? "text-foreground bg-white font-semibold shadow-xs dark:bg-zinc-800"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.login.createAccount}
+              </button>
+            </div>
+          )}
 
-        {ssoProviders.length > 0 && (
-          <div className="space-y-2">
-            {isLogin && (
-              <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background text-muted-foreground px-2">
-                    {t.login.orContinueWith}
+          {/* Service unavailable alert */}
+          {showSetupStatusUnavailable && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-50/80 p-4 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+            >
+              <AlertTriangle
+                className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+                aria-hidden="true"
+              />
+              <div className="flex-1">
+                <p className="font-medium">{t.login.serviceUnavailableTitle}</p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-800/80 dark:text-amber-200/80">
+                  {t.login.serviceUnavailableDescription}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 h-8 cursor-pointer rounded-xl border-amber-500/40 bg-white/50 text-xs font-medium hover:bg-amber-100 dark:bg-zinc-900/50 dark:hover:bg-amber-900/40"
+                  disabled={setupStatusPhase === "checking"}
+                  onClick={() => {
+                    setSetupStatusPhase("checking");
+                    setSetupStatusAttempt((attempt) => attempt + 1);
+                  }}
+                >
+                  {setupStatusPhase === "checking" ? (
+                    <span className="flex items-center gap-1.5">
+                      <Loader2
+                        className="h-3.5 w-3.5 animate-spin"
+                        aria-hidden="true"
+                      />
+                      {t.login.pleaseWait}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                      {t.login.retry}
+                    </span>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Admin setup required notification */}
+          {systemNeedsAdminSetup && (
+            <div className="flex items-start gap-3 rounded-2xl border border-blue-500/30 bg-blue-50/80 p-4 text-sm text-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+              <ShieldCheck
+                className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400"
+                aria-hidden="true"
+              />
+              <div className="flex-1">
+                <p className="font-medium">{t.login.adminSetupRequiredTitle}</p>
+                <p className="mt-1 text-xs leading-relaxed text-blue-800/80 dark:text-blue-200/80">
+                  {t.login.adminSetupRequiredDescription}
+                </p>
+                <Link
+                  href="/setup"
+                  className="mt-2.5 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-500 hover:underline dark:text-blue-400"
+                >
+                  {t.login.createAdminAccount}
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
+            {/* Email Field */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="email"
+                className="text-muted-foreground/90 text-xs font-medium tracking-wider uppercase"
+              >
+                {t.login.email}
+              </label>
+              <div className="relative">
+                <Mail
+                  aria-hidden="true"
+                  className="text-muted-foreground/60 peer-focus:text-primary pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 transition-colors"
+                />
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t.login.emailPlaceholder}
+                  required
+                  autoComplete="email"
+                  className="peer focus-visible:ring-primary/20 focus-visible:border-primary h-11 rounded-xl border-slate-200/80 bg-slate-50/70 pl-10 text-sm transition-all dark:border-zinc-800 dark:bg-zinc-900/60"
+                />
+              </div>
+            </div>
+
+            {/* Password Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="password"
+                  className="text-muted-foreground/90 text-xs font-medium tracking-wider uppercase"
+                >
+                  {t.login.password}
+                </label>
+                {!isLogin && (
+                  <span className="text-muted-foreground text-[11px]">
+                    {password.length >= 8 ? (
+                      <span className="inline-flex items-center gap-0.5 font-medium text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="h-3 w-3" aria-hidden="true" />≥
+                        8 chars
+                      </span>
+                    ) : (
+                      <span>Min 8 chars</span>
+                    )}
                   </span>
-                </div>
+                )}
+              </div>
+              <div className="relative">
+                <Lock
+                  aria-hidden="true"
+                  className="text-muted-foreground/60 peer-focus:text-primary pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 transition-colors"
+                />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t.login.passwordPlaceholder}
+                  required
+                  minLength={isLogin ? 6 : 8}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                  className="peer focus-visible:ring-primary/20 focus-visible:border-primary h-11 rounded-xl border-slate-200/80 bg-slate-50/70 pr-11 pl-10 text-sm transition-all dark:border-zinc-800 dark:bg-zinc-900/60"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="text-muted-foreground/60 hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 cursor-pointer rounded-lg p-1 transition-colors hover:bg-slate-200/50 dark:hover:bg-zinc-800/50"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Remember Me Option */}
+            <div className="pt-0.5">
+              <RememberSessionOption
+                checked={rememberMe}
+                onCheckedChange={setRememberMe}
+              />
+            </div>
+
+            {/* Error Message Alert */}
+            {error && (
+              <div
+                role="alert"
+                className="border-destructive/20 bg-destructive/10 text-destructive flex items-start gap-2.5 rounded-xl border p-3 text-sm dark:text-red-400"
+              >
+                <AlertCircle
+                  className="text-destructive mt-0.5 h-4 w-4 shrink-0 dark:text-red-400"
+                  aria-hidden="true"
+                />
+                <p className="flex-1 leading-snug">{error}</p>
               </div>
             )}
-            {showSsoHint && (
-              <p className="text-muted-foreground text-center text-sm">
-                {t.login.ssoHint}
-              </p>
-            )}
-            {ssoProviders.map((provider) => (
-              <Button
-                key={provider.id}
-                type="button"
-                variant="outline"
-                className="w-full"
-                disabled={loading}
-                onClick={() => {
-                  window.location.href = `/api/v1/auth/oauth/${provider.id}?next=${encodeURIComponent(redirectPath)}&remember_me=${String(rememberMe)}`;
-                }}
-              >
-                {t.login.continueWith(provider.display_name)}
-              </Button>
-            ))}
-          </div>
-        )}
 
-        {regularSignupAllowed && (
-          <div className="text-center text-sm">
-            <button
-              type="button"
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setError("");
-                setShowSsoHint(false);
-              }}
-              className="text-blue-500 hover:underline"
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              disabled={loading}
+              className="h-11 w-full cursor-pointer rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-indigo-600 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all duration-200 hover:from-violet-500 hover:to-indigo-500 hover:shadow-lg hover:shadow-indigo-500/30 active:scale-[0.99]"
             >
-              {isLogin ? t.login.noAccountSignUp : t.login.haveAccountSignIn}
-            </button>
-          </div>
-        )}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2
+                    className="h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  <span>{t.login.pleaseWait}</span>
+                </span>
+              ) : isLogin ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span>{t.login.signIn}</span>
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <span>{t.login.createAccount}</span>
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </span>
+              )}
+            </Button>
+          </form>
+
+          {/* SSO Providers */}
+          {ssoProviders.length > 0 && (
+            <div className="space-y-3 pt-1">
+              {isLogin && (
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-slate-200/80 dark:border-zinc-800" />
+                  </div>
+                  <div className="relative flex justify-center text-xs tracking-wider uppercase">
+                    <span className="text-muted-foreground rounded-full border border-slate-200/60 bg-white/90 px-3 py-0.5 text-[11px] font-medium backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/90">
+                      {t.login.orContinueWith}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {showSsoHint && (
+                <p className="text-muted-foreground rounded-xl border border-slate-200/60 bg-slate-100/60 p-2.5 text-center text-xs leading-relaxed dark:border-zinc-800 dark:bg-zinc-900/60">
+                  {t.login.ssoHint}
+                </p>
+              )}
+              <div className="grid gap-2">
+                {ssoProviders.map((provider) => (
+                  <Button
+                    key={provider.id}
+                    type="button"
+                    variant="outline"
+                    className="h-11 w-full cursor-pointer rounded-xl border-slate-200/80 text-sm font-medium transition-all hover:bg-slate-100/80 dark:border-zinc-800 dark:hover:bg-zinc-900/80"
+                    disabled={loading}
+                    onClick={() => {
+                      window.location.href = `/api/v1/auth/oauth/${provider.id}?next=${encodeURIComponent(redirectPath)}&remember_me=${String(rememberMe)}`;
+                    }}
+                  >
+                    <KeyRound
+                      className="text-muted-foreground mr-2 h-4 w-4"
+                      aria-hidden="true"
+                    />
+                    {t.login.continueWith(provider.display_name)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Bottom Switch Link */}
+          {regularSignupAllowed && (
+            <div className="border-t border-slate-200/60 pt-2 text-center text-sm dark:border-zinc-800/70">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setError("");
+                  setShowSsoHint(false);
+                }}
+                className="text-primary hover:text-primary/80 cursor-pointer font-medium transition-colors hover:underline"
+              >
+                {isLogin ? t.login.noAccountSignUp : t.login.haveAccountSignIn}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

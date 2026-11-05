@@ -354,7 +354,7 @@ export const zhCN: Translations = {
   welcome: {
     greeting: "你好，欢迎回来！",
     description:
-      "欢迎使用小易，一个完全开源的超级智能体。通过内置和自定义的 Skills，\n小易 可以帮你搜索网络、分析数据，还能为你生成幻灯片、\n图片、视频、播客及网页等，几乎可以做任何事情。",
+      "欢迎使用小易，小易可以帮你检索知识库文档，搜索网络、分析数据，更多功能，敬请期待~",
 
     createYourOwnSkill: "创建你自己的 Agent SKill",
     createYourOwnSkillDescription:

@@ -1,14 +1,42 @@
 "use client";
 
+import { CalendarDaysIcon, RocketIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
 import { AuroraText } from "../ui/aurora-text";
 
-let waved = false;
+function formatSystemDate(date: Date, locale = "zh-CN"): string {
+  try {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const weekdaysZh = [
+      "星期日",
+      "星期一",
+      "星期二",
+      "星期三",
+      "星期四",
+      "星期五",
+      "星期六",
+    ];
+    if (locale.startsWith("zh")) {
+      const weekday = weekdaysZh[date.getDay()];
+      return `${year}年${month}月${day}日 ${weekday}`;
+    }
+    return new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "long",
+    }).format(date);
+  } catch {
+    return date.toLocaleDateString();
+  }
+}
 
 function WelcomeDescription({ children }: { children: string }) {
   return (
@@ -25,7 +53,7 @@ export function Welcome({
   className?: string;
   mode?: "ultra" | "pro" | "thinking" | "flash";
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const searchParams = useSearchParams();
   const isUltra = useMemo(() => mode === "ultra", [mode]);
   const colors = useMemo(() => {
@@ -34,9 +62,15 @@ export function Welcome({
     }
     return ["var(--color-foreground)"];
   }, [isUltra]);
+
+  const [currentDate, setCurrentDate] = useState(() =>
+    formatSystemDate(new Date(), locale),
+  );
+
   useEffect(() => {
-    waved = true;
-  }, []);
+    setCurrentDate(formatSystemDate(new Date(), locale));
+  }, [locale]);
+
   return (
     <div
       className={cn(
@@ -49,10 +83,22 @@ export function Welcome({
           `✨ ${t.welcome.createYourOwnSkill} ✨`
         ) : (
           <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
-            <div className={cn("inline-block", !waved ? "animate-wave" : "")}>
-              {isUltra ? "🚀" : "👋"}
+            <div className="text-primary inline-flex items-center justify-center">
+              {isUltra ? (
+                <RocketIcon
+                  className="size-6 text-amber-500"
+                  aria-hidden="true"
+                />
+              ) : (
+                <CalendarDaysIcon
+                  className="text-primary size-6"
+                  aria-hidden="true"
+                />
+              )}
             </div>
-            <AuroraText colors={colors}>{t.welcome.greeting}</AuroraText>
+            <span suppressHydrationWarning className="inline-flex items-center">
+              <AuroraText colors={colors}>{currentDate}</AuroraText>
+            </span>
           </div>
         )}
       </div>

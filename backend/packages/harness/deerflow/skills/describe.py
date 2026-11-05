@@ -242,7 +242,7 @@ You have access to skills that provide optimized workflows for specific tasks.
 - If the user starts a request with `/<skill-name>`, that skill was explicitly requested.
 - The runtime injects the activated skill content; do not call `read_file` for that SKILL.md again unless the injected skill references supporting resources you need.
 
-**Allowed tools:** A skill's `allowed-tools` metadata is compatibility information for other agent frameworks. It never restricts or grants tools here; your tools are controlled by DeerFlow's Agent configuration and authorization.
+**Allowed tools:** A skill's `allowed-tools` metadata is compatibility information for other agent frameworks. It never restricts or grants tools here; your tools are controlled by framework's Agent configuration and authorization.
 {evolution}
 <skill_index>
 {names}
